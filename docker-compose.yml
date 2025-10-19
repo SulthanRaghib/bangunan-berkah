@@ -1,0 +1,152 @@
+services:
+  # 🗄️ MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    env_file:
+      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: ${TZ}
+    ports:
+      - "3307:3306"         # host:container
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal_net
+
+  # 🧰 PhpMyAdmin (GUI)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    env_file:
+      - .env
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      UPLOAD_LIMIT: 300M
+    ports:
+      - "8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  # 🔑 Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+    container_name: auth-service
+    restart: always
+    env_file:
+      - ./services/auth-service/.env
+    ports:
+      - "8001:8001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  # 🛒 Product Service
+  product-service:
+    build:
+      context: ./services/product-service
+    container_name: product-service
+    restart: always
+    env_file:
+      - ./services/product-service/.env
+    ports:
+      - "8002:8002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  # 💬 Chat Service
+  chat-service:
+    build:
+      context: ./services/chat-service
+    container_name: chat-service
+    restart: always
+    env_file:
+      - ./services/chat-service/.env
+    ports:
+      - "8003:8003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  # 🏗️ Project Service
+  project-service:
+    build:
+      context: ./services/project-service
+    container_name: project-service
+    restart: always
+    env_file:
+      - ./services/project-service/.env
+    ports:
+      - "8004:8004"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  # ⭐ Review Service
+  review-service:
+    build:
+      context: ./services/review-service
+    container_name: review-service
+    restart: always
+    env_file:
+      - ./services/review-service/.env
+    ports:
+      - "8005:8005"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  # 🌐 API Gateway
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    container_name: api-gateway
+    restart: always
+    env_file:
+      - ./services/api-gateway/.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - product-service
+      - chat-service
+      - project-service
+      - review-service
+    networks:
+      - internal_net
+
+# 🔗 Shared Network
+networks:
+  internal_net:
+    driver: bridge
+
+# 💾 Persistent Volume for MySQL
+volumes:
+  mysql_data:

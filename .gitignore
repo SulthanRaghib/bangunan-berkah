@@ -1,0 +1,7 @@
+node_modules/
+.env
+**/.env        # ignore semua env di subfolder
+dist/
+logs/
+Dockerfile
+docker-compose.override.yml
