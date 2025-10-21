@@ -16,10 +16,11 @@ services:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - internal_net
 
@@ -62,8 +63,13 @@ services:
         condition: service_healthy
     networks:
       - internal_net
-    # Override CMD untuk development
-    command: npm run dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: npm run dev  # ← Override CMD untuk pakai nodemon
 
   # 🛒 Product Service
   product-service:
@@ -156,3 +162,4 @@ networks:
 # 💾 Persistent Volume for MySQL
 volumes:
   mysql_data:
+    driver: local
