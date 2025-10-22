@@ -1,0 +1,98 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CATEGORY MODEL
+// ============================================
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(100)
+  slug        String    @unique @db.VarChar(100)
+  description String?   @db.Text
+  icon        String?   @db.VarChar(255)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  products    Product[]
+
+  @@map("categories")
+}
+
+// ============================================
+// PRODUCT MODEL
+// ============================================
+model Product {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  slug        String    @unique @db.VarChar(255)
+  description String?   @db.Text
+  sku         String    @unique @db.VarChar(100)
+  price       Decimal   @db.Decimal(15, 2)
+  salePrice   Decimal?  @db.Decimal(15, 2)
+  categoryId  Int
+  unit        String    @default("pcs") @db.VarChar(50) // pcs, box, karton, dll
+  weight      Decimal?  @db.Decimal(10, 2) // dalam kg
+  dimensions  String?   @db.VarChar(100) // contoh: "10x20x30 cm"
+  images      Json?     // Array of image URLs
+  tags        String?   @db.VarChar(500) // comma separated
+  isActive    Boolean   @default(true)
+  isFeatured  Boolean   @default(false)
+  createdBy   Int       // User ID dari auth-service
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  inventory   Inventory?
+
+  @@index([categoryId])
+  @@index([sku])
+  @@index([slug])
+  @@map("products")
+}
+
+// ============================================
+// INVENTORY MODEL
+// ============================================
+model Inventory {
+  id              Int      @id @default(autoincrement())
+  productId       Int      @unique
+  stock           Int      @default(0)
+  minStock        Int      @default(10) // Alert jika stock < minStock
+  maxStock        Int      @default(1000)
+  warehouseLocation String? @db.VarChar(100)
+  lastRestockDate DateTime?
+  lastRestockQty  Int?
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("inventories")
+}
+
+// ============================================
+// STOCK HISTORY MODEL (Optional - untuk tracking)
+// ============================================
+model StockHistory {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  type        String   @db.VarChar(50) // "in" (masuk) atau "out" (keluar)
+  quantity    Int
+  description String?  @db.Text
+  createdBy   Int      // User ID
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("stock_histories")
+}
