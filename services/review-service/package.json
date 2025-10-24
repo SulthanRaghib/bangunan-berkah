@@ -1,7 +1,7 @@
 {
   "name": "review-service",
   "version": "1.0.0",
-  "description": "Microservice for PT Solusi Bangunan Berkah",
+  "description": "Review Management Service for PT Solusi Bangunan Berkah",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

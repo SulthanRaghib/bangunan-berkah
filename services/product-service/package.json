@@ -1,7 +1,7 @@
 {
   "name": "product-service",
   "version": "1.0.0",
-  "description": "Microservice for PT Solusi Bangunan Berkah",
+  "description": "Product Management Service for PT Solusi Bangunan Berkah",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
