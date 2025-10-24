@@ -271,29 +271,42 @@ exports.getStockHistory = async (req, res) => {
 };
 
 // ========================================
-// GET TOTAL STOCK VALUE
+// UPDATE INVENTORY SETTINGS
 // ========================================
 exports.updateInventorySettings = async (req, res) => {
   try {
-    const { minStock } = req.body;
+    const { productId } = req.params;
+    const { minStock, maxStock, warehouseLocation } = req.body;
 
-    if (minStock == null || isNaN(minStock) || minStock < 0) {
-      return res.status(400).json({
+    // Check inventory exists
+    const inventory = await prisma.inventory.findUnique({
+      where: { productId: parseInt(productId) },
+    });
+
+    if (!inventory) {
+      return res.status(404).json({
         success: false,
-        message: "minStock wajib diisi dengan angka valid >= 0",
+        message: "Inventory tidak ditemukan",
       });
     }
 
-    const updatedSettings = await prisma.inventorySettings.upsert({
-      where: { id: 1 },
-      update: { minStock: parseInt(minStock) },
-      create: { id: 1, minStock: parseInt(minStock) },
+    // Prepare update data
+    const updateData = {};
+    if (minStock !== undefined) updateData.minStock = parseInt(minStock);
+    if (maxStock !== undefined) updateData.maxStock = parseInt(maxStock);
+    if (warehouseLocation !== undefined)
+      updateData.warehouseLocation = warehouseLocation;
+
+    // Update
+    const updated = await prisma.inventory.update({
+      where: { productId: parseInt(productId) },
+      data: updateData,
     });
 
     res.status(200).json({
       success: true,
       message: "Pengaturan inventory berhasil diperbarui",
-      data: updatedSettings,
+      data: updated,
     });
   } catch (err) {
     console.error("Update inventory settings error:", err);
