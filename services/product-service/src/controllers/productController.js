@@ -409,7 +409,7 @@ exports.updateProduct = async (req, res) => {
     console.error("Update product error:", err);
     res.status(500).json({
       success: false,
-      message: "Terjadi kesalahan server",
+      message: "ID produk mungkin sudah dihapus atau terjadi kesalahan server",
     });
   }
 };
