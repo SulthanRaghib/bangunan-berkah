@@ -1,20 +1,32 @@
 #!/bin/sh
 set -e
 
-# Ensure uploads directories exist and have correct permissions
-echo "🔧 Ensuring upload directories exist..."
+echo "🔄 Checking database connection..."
+
+# Wait for database
+until npx prisma db push --accept-data-loss --skip-generate > /dev/null 2>&1; do
+  echo "⏳ Waiting for database..."
+  sleep 2
+done
+
+echo "✅ Database is ready!"
+
+# Create uploads directory
+echo "� Creating uploads directory..."
 mkdir -p /app/uploads/products
-mkdir -p /app/uploads
-chown -R node:node /app/uploads || true
+chmod -R 755 /app/uploads
 
-# Run prisma migrations
+# Run migrations
 echo "🔄 Running Prisma migrations..."
-if [ -f prisma/schema.prisma ]; then
-  npx prisma migrate deploy || true
-  echo "✅ Migrations completed or no migrations to apply"
-else
-  echo "⚠️ Prisma schema not found, skipping migrations"
-fi
+npx prisma migrate deploy || true
 
-# Execute the container CMD
+echo "✅ Migrations completed!"
+
+# Generate Prisma Client
+echo "🔄 Generating Prisma Client..."
+npx prisma generate
+
+echo "🚀 Starting application..."
+
+# Execute CMD
 exec "$@"

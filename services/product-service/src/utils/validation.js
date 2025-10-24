@@ -33,7 +33,7 @@ const createProductSchema = Joi.object({
   isFeatured: Joi.boolean().optional(),
   stock: Joi.number().integer().min(0).optional(), // Initial stock
   minStock: Joi.number().integer().min(0).optional(),
-});
+}).unknown(true); // Allow additional fields like 'images'
 
 const updateProductSchema = Joi.object({
   name: Joi.string().min(3).max(255).optional(),
@@ -48,7 +48,9 @@ const updateProductSchema = Joi.object({
   tags: Joi.string().max(500).optional().allow(""),
   isActive: Joi.boolean().optional(),
   isFeatured: Joi.boolean().optional(),
-}).min(1);
+})
+  .min(1)
+  .unknown(true); // Allow additional fields
 
 // ========================================
 // INVENTORY VALIDATION
