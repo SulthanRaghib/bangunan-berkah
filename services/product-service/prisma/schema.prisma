@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -12,11 +12,11 @@ datasource db {
 // CATEGORY MODEL
 // ============================================
 model Category {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique @db.VarChar(100)
-  slug        String    @unique @db.VarChar(100)
-  description String?   @db.Text
-  icon        String?   @db.VarChar(255)
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  icon        String?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -31,22 +31,22 @@ model Category {
 // PRODUCT MODEL
 // ============================================
 model Product {
-  id          Int       @id @default(autoincrement())
-  name        String    @db.VarChar(255)
-  slug        String    @unique @db.VarChar(255)
-  description String?   @db.Text
-  sku         String    @unique @db.VarChar(100)
-  price       Decimal   @db.Decimal(15, 2)
-  salePrice   Decimal?  @db.Decimal(15, 2)
-  categoryId  Int
-  unit        String    @default("pcs") @db.VarChar(50) // pcs, box, karton, dll
-  weight      Decimal?  @db.Decimal(10, 2) // dalam kg
-  dimensions  String?   @db.VarChar(100) // contoh: "10x20x30 cm"
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String    @unique
+  description String?
+  sku         String    @unique
+  price       Float     // MongoDB tidak support Decimal, gunakan Float atau String
+  salePrice   Float?    
+  categoryId  String    @db.ObjectId
+  unit        String    @default("pcs") // pcs, box, karton, dll
+  weight      Float?    // dalam kg
+  dimensions  String?   // contoh: "10x20x30 cm"
   images      Json?     // Array of image URLs
-  tags        String?   @db.VarChar(500) // comma separated
+  tags        String?   // comma separated
   isActive    Boolean   @default(true)
   isFeatured  Boolean   @default(false)
-  createdBy   Int       // User ID dari auth-service
+  createdBy   String    // User ID dari auth-service (sekarang String/ObjectId)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -54,9 +54,6 @@ model Product {
   category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   inventory   Inventory?
 
-  @@index([categoryId])
-  @@index([sku])
-  @@index([slug])
   @@map("products")
 }
 
@@ -64,12 +61,12 @@ model Product {
 // INVENTORY MODEL
 // ============================================
 model Inventory {
-  id              Int      @id @default(autoincrement())
-  productId       Int      @unique
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId       String   @unique @db.ObjectId
   stock           Int      @default(0)
   minStock        Int      @default(10) // Alert jika stock < minStock
   maxStock        Int      @default(1000)
-  warehouseLocation String? @db.VarChar(100)
+  warehouseLocation String?
   lastRestockDate DateTime?
   lastRestockQty  Int?
   updatedAt       DateTime @updatedAt
@@ -84,15 +81,13 @@ model Inventory {
 // STOCK HISTORY MODEL (Optional - untuk tracking)
 // ============================================
 model StockHistory {
-  id          Int      @id @default(autoincrement())
-  productId   Int
-  type        String   @db.VarChar(50) // "in" (masuk) atau "out" (keluar)
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId   String   @db.ObjectId
+  type        String   // "in" (masuk) atau "out" (keluar)
   quantity    Int
-  description String?  @db.Text
-  createdBy   Int      // User ID
+  description String?
+  createdBy   String   // User ID (sekarang String/ObjectId)
   createdAt   DateTime @default(now())
 
-  @@index([productId])
-  @@index([createdAt])
   @@map("stock_histories")
 }
