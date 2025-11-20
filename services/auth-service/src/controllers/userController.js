@@ -10,36 +10,60 @@ exports.getAllUsers = async (req, res) => {
     const { page = 1, limit = 10, search = "", role } = req.query;
     const skip = (page - 1) * limit;
 
-    // Build where clause
-    const where = {};
+    // Build filter
+    const filter = {};
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { email: { contains: search } },
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
       ];
     }
     if (role) {
-      where.role = role;
+      filter.role = role;
     }
 
-    // Get users with pagination
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
+    // Get users with pagination using aggregation
+    const usersResult = await prisma.$runCommandRaw({
+      aggregate: "users",
+      pipeline: [
+        { $match: filter },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            email: 1,
+            role: 1,
+            createdAt: 1,
+            updatedAt: 1,
+          }
         },
-        skip: parseInt(skip),
-        take: parseInt(limit),
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.user.count({ where }),
-    ]);
+        { $sort: { createdAt: -1 } },
+        { $skip: parseInt(skip) },
+        { $limit: parseInt(limit) }
+      ],
+      cursor: {}
+    });
+
+    // Get total count
+    const countResult = await prisma.$runCommandRaw({
+      aggregate: "users",
+      pipeline: [
+        { $match: filter },
+        { $count: "total" }
+      ],
+      cursor: {}
+    });
+
+    const users = usersResult.cursor.firstBatch.map(user => ({
+      id: user._id.$oid || user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+
+    const total = countResult.cursor.firstBatch[0]?.total || 0;
 
     res.status(200).json({
       success: true,
@@ -68,29 +92,40 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const userResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { _id: parseInt(id) },
+      limit: 1,
+      projection: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        role: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      }
     });
 
-    if (!user) {
+    if (userResult.cursor.firstBatch.length === 0) {
       return res.status(404).json({
         success: false,
         message: "User tidak ditemukan",
       });
     }
 
+    const user = userResult.cursor.firstBatch[0];
+
     res.status(200).json({
       success: true,
       message: "User berhasil diambil",
-      user,
+      user: {
+        id: user._id.$oid || user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     });
   } catch (err) {
     console.error("Get user by ID error:", err);
@@ -119,19 +154,28 @@ exports.updateUser = async (req, res) => {
     }
 
     // Cek user exists
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    const userResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { _id: parseInt(id) },
+      limit: 1,
     });
 
-    if (!user) {
+    if (userResult.cursor.firstBatch.length === 0) {
       return res.status(404).json({
         success: false,
         message: "User tidak ditemukan",
       });
     }
 
+    const user = userResult.cursor.firstBatch[0];
+
     // Check authorization (user hanya bisa update dirinya sendiri, kecuali admin)
-    if (req.user.role !== "admin" && req.user.id !== parseInt(id)) {
+    let tokenUserId = req.user.id;
+    if (typeof tokenUserId === 'object' && tokenUserId.$oid) {
+      tokenUserId = tokenUserId.$oid;
+    }
+
+    if (req.user.role !== "admin" && tokenUserId !== parseInt(id)) {
       return res.status(403).json({
         success: false,
         message: "Anda tidak memiliki akses untuk mengubah user ini",
@@ -140,10 +184,12 @@ exports.updateUser = async (req, res) => {
 
     // Check jika email sudah digunakan user lain
     if (email && email !== user.email) {
-      const existingUser = await prisma.user.findUnique({
-        where: { email },
+      const existingUserResult = await prisma.$runCommandRaw({
+        find: "users",
+        filter: { email },
+        limit: 1,
       });
-      if (existingUser) {
+      if (existingUserResult.cursor.firstBatch.length > 0) {
         return res.status(400).json({
           success: false,
           message: "Email sudah digunakan",
@@ -152,38 +198,58 @@ exports.updateUser = async (req, res) => {
     }
 
     // Prepare update data
-    const updateData = {};
+    const updateData = { updatedAt: new Date() };
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     if (password) updateData.password = await hashPassword(password);
 
     // Only admin can change role
-    if (role && req.user.role === "admin") {
-      updateData.role = role;
-
-      return res.status(400).json({
-        success: false,
-        message: "Anda tidak memiliki akses untuk mengubah role",
-      });
+    if (role) {
+      if (req.user.role === "admin") {
+        updateData.role = role;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Anda tidak memiliki akses untuk mengubah role",
+        });
+      }
     }
 
     // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        updatedAt: true,
-      },
+    await prisma.$runCommandRaw({
+      update: "users",
+      updates: [{
+        q: { _id: parseInt(id) },
+        u: { $set: updateData }
+      }]
     });
+
+    // Get updated user
+    const updatedUserResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { _id: parseInt(id) },
+      limit: 1,
+      projection: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        role: 1,
+        updatedAt: 1,
+      }
+    });
+
+    const updatedUser = updatedUserResult.cursor.firstBatch[0];
 
     res.status(200).json({
       success: true,
       message: "User berhasil diperbarui",
-      user: updatedUser,
+      user: {
+        id: updatedUser._id.$oid || updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        updatedAt: updatedUser.updatedAt,
+      },
     });
   } catch (err) {
     console.error("Update user error:", err);
@@ -202,11 +268,13 @@ exports.deleteUser = async (req, res) => {
     const { id } = req.params;
 
     // Cek user exists
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    const userResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { _id: parseInt(id) },
+      limit: 1,
     });
 
-    if (!user) {
+    if (userResult.cursor.firstBatch.length === 0) {
       return res.status(404).json({
         success: false,
         message: "User tidak ditemukan",
@@ -214,7 +282,12 @@ exports.deleteUser = async (req, res) => {
     }
 
     // Prevent deleting yourself
-    if (req.user.id === parseInt(id)) {
+    let tokenUserId = req.user.id;
+    if (typeof tokenUserId === 'object' && tokenUserId.$oid) {
+      tokenUserId = tokenUserId.$oid;
+    }
+
+    if (tokenUserId === parseInt(id)) {
       return res.status(400).json({
         success: false,
         message: "Anda tidak dapat menghapus akun sendiri",
@@ -222,8 +295,12 @@ exports.deleteUser = async (req, res) => {
     }
 
     // Delete user
-    await prisma.user.delete({
-      where: { id: parseInt(id) },
+    await prisma.$runCommandRaw({
+      delete: "users",
+      deletes: [{
+        q: { _id: parseInt(id) },
+        limit: 1
+      }]
     });
 
     res.status(200).json({

@@ -19,8 +19,13 @@ exports.register = async (req, res) => {
     }
 
     // Cek email sudah terdaftar
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    const existingUserResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { email },
+      limit: 1
+    });
+
+    if (existingUserResult.cursor.firstBatch.length > 0) {
       return res.status(400).json({ message: "Email sudah terdaftar" });
     }
 
@@ -28,24 +33,31 @@ exports.register = async (req, res) => {
     const hashedPassword = await hashPassword(password);
 
     // Create user
-    const newUser = await prisma.user.create({
-      data: {
+    const newUser = await prisma.$runCommandRaw({
+      insert: "users",
+      documents: [{
         name,
         email,
         password: hashedPassword,
         role: role || "user",
-      },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }]
     });
 
+    // Get the inserted user ID
+    const insertedId = newUser.insertedIds[0];
+
     // Generate tokens
+    const userId = insertedId.$oid || insertedId;
     const token = generateToken({
-      id: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
+      id: userId,
+      email: email,
+      role: role || "user",
     });
 
     const refreshToken = generateRefreshToken({
-      id: newUser.id,
+      id: userId,
     });
 
     // Response
@@ -55,10 +67,10 @@ exports.register = async (req, res) => {
       token,
       refreshToken,
       user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
+        id: userId,
+        name: name,
+        email: email,
+        role: role || "user",
       },
     });
   } catch (err) {
@@ -86,7 +98,14 @@ exports.login = async (req, res) => {
     }
 
     // Cek user exists
-    const user = await prisma.user.findUnique({ where: { email } });
+    const userResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { email },
+      limit: 1,
+      projection: { _id: 1, name: 1, email: 1, role: 1, password: 1, createdAt: 1, updatedAt: 1 }
+    });
+
+    const user = userResult.cursor.firstBatch[0];
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -103,15 +122,16 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate tokens
+    // Generate tokens  
+    const userId = user._id.$oid || user._id;
     const token = generateToken({
-      id: user.id,
+      id: userId,
       email: user.email,
       role: user.role,
     });
 
     const refreshToken = generateRefreshToken({
-      id: user.id,
+      id: userId,
     });
 
     // Response
@@ -121,7 +141,7 @@ exports.login = async (req, res) => {
       token,
       refreshToken,
       user: {
-        id: user.id,
+        id: userId,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -175,27 +195,38 @@ exports.refreshToken = async (req, res) => {
     const jwt = require("jsonwebtoken");
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
+    // Handle both string IDs and ObjectId format from JWT
+    let refreshUserId = decoded.id;
+    if (typeof refreshUserId === 'object' && refreshUserId.$oid) {
+      refreshUserId = refreshUserId.$oid;
+    }
+
     // Get user
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+    const userResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { _id: refreshUserId },
+      limit: 1
     });
 
-    if (!user) {
-      return res.status(401).json({
+    if (userResult.cursor.firstBatch.length === 0) {
+      return res.status(404).json({
         success: false,
         message: "User tidak ditemukan",
       });
     }
 
+    const user = userResult.cursor.firstBatch[0];
+
     // Generate new tokens
+    const refreshTokenUserId = user._id.$oid || user._id;
     const newToken = generateToken({
-      id: user.id,
+      id: refreshTokenUserId,
       email: user.email,
       role: user.role,
     });
 
     const newRefreshToken = generateRefreshToken({
-      id: user.id,
+      id: refreshTokenUserId,
     });
 
     res.status(200).json({
@@ -218,29 +249,46 @@ exports.refreshToken = async (req, res) => {
 // ========================================
 exports.getProfile = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    // Handle both string IDs and ObjectId format from JWT
+    let profileUserId = req.user.id;
+    if (typeof profileUserId === 'object' && profileUserId.$oid) {
+      profileUserId = profileUserId.$oid;
+    }
+
+    const userResult = await prisma.$runCommandRaw({
+      find: "users",
+      filter: { _id: profileUserId },
+      limit: 1,
+      projection: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        role: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      }
     });
 
-    if (!user) {
+    if (userResult.cursor.firstBatch.length === 0) {
       return res.status(404).json({
         success: false,
         message: "User tidak ditemukan",
       });
     }
 
+    const user = userResult.cursor.firstBatch[0];
+
     res.status(200).json({
       success: true,
       message: "Profile berhasil diambil",
-      user,
+      user: {
+        id: user._id.$oid || user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     });
   } catch (err) {
     console.error("Get profile error:", err);
