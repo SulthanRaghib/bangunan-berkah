@@ -1,0 +1,150 @@
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl"]
+}
+
+datasource db {
+    provider = "mongodb"
+    url      = env("DATABASE_URL")
+}
+
+// ============================================
+// PROJECT MODEL (Proyek Pembangunan)
+// ============================================
+model Project {
+    id String @id @default(auto()) @map("_id") @db.ObjectId
+
+    // Project Identifier (Customer akan pakai ini untuk tracking)
+    projectCode String @unique // contoh: PRJ-2025-0001
+
+    // Project Info
+    projectName String
+    description String?
+    projectType String // "konstruksi" atau "furniture"
+
+    // Customer Info
+    customerName    String
+    customerEmail   String
+    customerPhone   String
+    customerAddress String
+
+    // Budget & Financial
+    budget     Float?
+    actualCost Float  @default(0)
+
+    // Timeline
+    startDate        DateTime
+    estimatedEndDate DateTime
+    actualEndDate    DateTime?
+
+    // Status & Progress
+    status String @default("pending") // pending, in_progress, on_hold, completed, cancelled
+
+    progress Int @default(0) // 0-100% (calculated from milestones)
+
+    // Documentation
+    contractDocument String? // URL to contract file
+    notes            String?
+
+    // Admin Info
+    createdBy     String // Admin user ID dari auth-service
+    createdByName String // Admin name
+
+    // Timestamps
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now())
+
+    // Relations (Embedded)
+    milestones Milestone[]
+    documents  ProjectDocument[]
+    activities ProjectActivity[]
+
+    @@map("projects")
+}
+
+// ============================================
+// MILESTONE (Tahapan Progres) - Embedded
+// ============================================
+type Milestone {
+    id          String  @default(uuid())
+    title       String
+    description String?
+    order       Int // Urutan milestone (1, 2, 3, ...)
+
+    // Timeline
+    startDate       DateTime
+    endDate         DateTime
+    actualStartDate DateTime?
+    actualEndDate   DateTime?
+
+    // Progress
+    progress Int    @default(0) // 0-100%
+    status   String @default("pending") // pending, in_progress, completed, delayed
+
+    // Photos
+    photos MilestonePhoto[]
+
+    // Notes
+    notes String?
+
+    // Timestamps
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now())
+}
+
+// ============================================
+// MILESTONE PHOTO - Embedded in Milestone
+// ============================================
+type MilestonePhoto {
+    id         String   @default(uuid())
+    filename   String
+    url        String
+    caption    String?
+    uploadedBy String // User ID
+    uploadedAt DateTime @default(now())
+}
+
+// ============================================
+// PROJECT DOCUMENT - Embedded
+// ============================================
+type ProjectDocument {
+    id         String   @default(uuid())
+    title      String
+    filename   String
+    fileType   String // pdf, doc, xlsx, image
+    fileSize   Int // in bytes
+    url        String
+    category   String // contract, blueprint, permit, invoice, report
+    uploadedBy String // User ID
+    uploadedAt DateTime @default(now())
+}
+
+// ============================================
+// PROJECT ACTIVITY LOG - Embedded
+// ============================================
+type ProjectActivity {
+    id          String   @default(uuid())
+    userId      String // User yang melakukan aktivitas
+    userName    String
+    action      String // created, updated, status_changed, milestone_completed
+    description String
+    metadata    Json? // Additional data
+    createdAt   DateTime @default(now())
+}
+
+// ============================================
+// STATISTICS (Optional - untuk dashboard)
+// ============================================
+model ProjectStats {
+    id                String   @id @default(auto()) @map("_id") @db.ObjectId
+    year              Int
+    month             Int
+    totalProjects     Int      @default(0)
+    completedProjects Int      @default(0)
+    activeProjects    Int      @default(0)
+    totalRevenue      Float    @default(0)
+    updatedAt         DateTime @default(now())
+
+    @@unique([year, month])
+    @@map("project_stats")
+}
