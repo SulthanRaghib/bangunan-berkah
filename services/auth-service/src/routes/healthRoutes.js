@@ -5,8 +5,9 @@ const prisma = require("../config/prisma");
 // Health check endpoint
 router.get("/health", async (req, res) => {
   try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`;
+    // Check database connection using MongoDB ping command which is
+    // supported by Prisma's MongoDB provider via $runCommandRaw.
+    await prisma.$runCommandRaw({ ping: 1 });
 
     res.status(200).json({
       status: "healthy",
@@ -29,7 +30,7 @@ router.get("/health", async (req, res) => {
 // Readiness check
 router.get("/ready", async (req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$runCommandRaw({ ping: 1 });
     res.status(200).json({ ready: true });
   } catch (error) {
     res.status(503).json({ ready: false });
