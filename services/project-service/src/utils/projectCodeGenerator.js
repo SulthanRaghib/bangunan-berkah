@@ -9,25 +9,30 @@ async function generateProjectCode() {
     const year = new Date().getFullYear()
     const prefix = `PRJ-${year}`
 
-    // Get last project code for current year
-    const lastProject = await prisma.project.findFirst({
-        where: {
+    // Get all projects for current year and find the highest sequence number
+    const result = await prisma.$runCommandRaw({
+        find: "projects",
+        filter: {
             projectCode: {
-                startsWith: prefix
+                $regex: `^${prefix}`
             }
         },
-        orderBy: {
-            createdAt: "desc"
+        projection: {
+            projectCode: 1
         }
-    })
+    });
 
     let sequence = 1;
 
-    if (lastProject) {
-        // Extract sequence number from last code
-        const lastCode = lastProject.projectCode
-        const lastSequence = parseInt(lastCode.split("-")[2])
-        sequence = lastSequence + 1;
+    if (result.cursor.firstBatch.length > 0) {
+        // Extract all sequence numbers and find the highest
+        const sequences = result.cursor.firstBatch.map(project => {
+            const parts = project.projectCode.split("-");
+            return parseInt(parts[2]) || 0;
+        });
+
+        const maxSequence = Math.max(...sequences);
+        sequence = maxSequence + 1;
     }
 
     //  Format sequence with leading zeros (001, 002, ...)
@@ -40,11 +45,14 @@ async function generateProjectCode() {
  * Check if project code exists
  */
 async function isProjectCodeExists(projectCode) {
-    const project = await prisma.project.findUnique({
-        where: { projectCode }
-    })
+    const result = await prisma.$runCommandRaw({
+        find: "projects",
+        filter: { projectCode },
+        limit: 1,
+        projection: { _id: 1 }
+    });
 
-    return project !== null
+    return result.cursor.firstBatch.length > 0;
 }
 
 module.exports = {
