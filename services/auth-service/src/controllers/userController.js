@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { ObjectId } = require("mongodb");
 const { hashPassword } = require("../utils/bcrypt");
 const { validateUpdateUser } = require("../utils/validation");
 
@@ -59,8 +60,8 @@ exports.getAllUsers = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      createdAt: user.createdAt?.$date ? new Date(user.createdAt.$date) : new Date(user.createdAt),
+      updatedAt: user.updatedAt?.$date ? new Date(user.updatedAt.$date) : new Date(user.updatedAt),
     }));
 
     const total = countResult.cursor.firstBatch[0]?.total || 0;
@@ -92,18 +93,29 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Use aggregate with $toString to match _id as string
     const userResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { _id: parseInt(id) },
-      limit: 1,
-      projection: {
-        _id: 1,
-        name: 1,
-        email: 1,
-        role: 1,
-        createdAt: 1,
-        updatedAt: 1,
-      }
+      aggregate: "users",
+      pipeline: [
+        {
+          $addFields: {
+            idString: { $toString: "$_id" }
+          }
+        },
+        { $match: { idString: id } },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            email: 1,
+            role: 1,
+            createdAt: 1,
+            updatedAt: 1,
+          }
+        },
+        { $limit: 1 }
+      ],
+      cursor: {}
     });
 
     if (userResult.cursor.firstBatch.length === 0) {
@@ -123,8 +135,8 @@ exports.getUserById = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
+        createdAt: user.createdAt?.$date ? new Date(user.createdAt.$date) : new Date(user.createdAt),
+        updatedAt: user.updatedAt?.$date ? new Date(user.updatedAt.$date) : new Date(user.updatedAt),
       },
     });
   } catch (err) {
@@ -153,11 +165,19 @@ exports.updateUser = async (req, res) => {
       });
     }
 
-    // Cek user exists
+    // Cek user exists using $toString for ID matching
     const userResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { _id: parseInt(id) },
-      limit: 1,
+      aggregate: "users",
+      pipeline: [
+        {
+          $addFields: {
+            idString: { $toString: "$_id" }
+          }
+        },
+        { $match: { idString: id } },
+        { $limit: 1 }
+      ],
+      cursor: {}
     });
 
     if (userResult.cursor.firstBatch.length === 0) {
@@ -175,7 +195,7 @@ exports.updateUser = async (req, res) => {
       tokenUserId = tokenUserId.$oid;
     }
 
-    if (req.user.role !== "admin" && tokenUserId !== parseInt(id)) {
+    if (req.user.role !== "admin" && tokenUserId !== id) {
       return res.status(403).json({
         success: false,
         message: "Anda tidak memiliki akses untuk mengubah user ini",
@@ -215,28 +235,49 @@ exports.updateUser = async (req, res) => {
       }
     }
 
+    // Get the actual _id ObjectId from the found user
+    const actualUserId = user._id;
+
     // Update user
     await prisma.$runCommandRaw({
       update: "users",
       updates: [{
-        q: { _id: parseInt(id) },
+        q: { _id: actualUserId },
         u: { $set: updateData }
       }]
     });
 
     // Get updated user
     const updatedUserResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { _id: parseInt(id) },
-      limit: 1,
-      projection: {
-        _id: 1,
-        name: 1,
-        email: 1,
-        role: 1,
-        updatedAt: 1,
-      }
+      aggregate: "users",
+      pipeline: [
+        {
+          $addFields: {
+            idString: { $toString: "$_id" }
+          }
+        },
+        { $match: { idString: id } },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            email: 1,
+            role: 1,
+            createdAt: 1,
+            updatedAt: 1,
+          }
+        },
+        { $limit: 1 }
+      ],
+      cursor: {}
     });
+
+    if (updatedUserResult.cursor.firstBatch.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User tidak ditemukan setelah update",
+      });
+    }
 
     const updatedUser = updatedUserResult.cursor.firstBatch[0];
 
@@ -248,7 +289,7 @@ exports.updateUser = async (req, res) => {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
-        updatedAt: updatedUser.updatedAt,
+        updatedAt: updatedUser.updatedAt?.$date ? new Date(updatedUser.updatedAt.$date) : new Date(updatedUser.updatedAt),
       },
     });
   } catch (err) {
@@ -267,11 +308,19 @@ exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Cek user exists
+    // Cek user exists using $toString for ID matching
     const userResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { _id: parseInt(id) },
-      limit: 1,
+      aggregate: "users",
+      pipeline: [
+        {
+          $addFields: {
+            idString: { $toString: "$_id" }
+          }
+        },
+        { $match: { idString: id } },
+        { $limit: 1 }
+      ],
+      cursor: {}
     });
 
     if (userResult.cursor.firstBatch.length === 0) {
@@ -287,18 +336,22 @@ exports.deleteUser = async (req, res) => {
       tokenUserId = tokenUserId.$oid;
     }
 
-    if (tokenUserId === parseInt(id)) {
+    if (tokenUserId === id) {
       return res.status(400).json({
         success: false,
         message: "Anda tidak dapat menghapus akun sendiri",
       });
     }
 
+    // Get the actual _id ObjectId from the found user
+    const user = userResult.cursor.firstBatch[0];
+    const actualUserId = user._id;
+
     // Delete user
     await prisma.$runCommandRaw({
       delete: "users",
       deletes: [{
-        q: { _id: parseInt(id) },
+        q: { _id: actualUserId },
         limit: 1
       }]
     });

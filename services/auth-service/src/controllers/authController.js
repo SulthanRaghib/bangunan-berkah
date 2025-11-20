@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { ObjectId } = require("mongodb");
 const { hashPassword, comparePassword } = require("../utils/bcrypt");
 const { generateToken, generateRefreshToken } = require("../utils/jwt");
 const { validateRegister, validateLogin } = require("../utils/validation");
@@ -46,7 +47,7 @@ exports.register = async (req, res) => {
     });
 
     // Get the inserted user ID
-    const insertedId = newUser.insertedIds[0];
+    const insertedId = newUser.insertedId || newUser.insertedIds?.[0];
 
     // Generate tokens
     const userId = insertedId.$oid || insertedId;
@@ -204,7 +205,7 @@ exports.refreshToken = async (req, res) => {
     // Get user
     const userResult = await prisma.$runCommandRaw({
       find: "users",
-      filter: { _id: refreshUserId },
+      filter: { _id: new ObjectId(refreshUserId) },
       limit: 1
     });
 
@@ -249,15 +250,13 @@ exports.refreshToken = async (req, res) => {
 // ========================================
 exports.getProfile = async (req, res) => {
   try {
-    // Handle both string IDs and ObjectId format from JWT
-    let profileUserId = req.user.id;
-    if (typeof profileUserId === 'object' && profileUserId.$oid) {
-      profileUserId = profileUserId.$oid;
-    }
+    // Use email from JWT to find user (more reliable than _id with aggregate)
+    const userEmail = req.user.email;
 
+    // Use find query with email
     const userResult = await prisma.$runCommandRaw({
       find: "users",
-      filter: { _id: profileUserId },
+      filter: { email: userEmail },
       limit: 1,
       projection: {
         _id: 1,
@@ -286,8 +285,8 @@ exports.getProfile = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
+        createdAt: user.createdAt?.$date ? new Date(user.createdAt.$date) : new Date(user.createdAt),
+        updatedAt: user.updatedAt?.$date ? new Date(user.updatedAt.$date) : new Date(user.updatedAt),
       },
     });
   } catch (err) {
