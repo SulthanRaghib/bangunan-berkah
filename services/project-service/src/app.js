@@ -24,11 +24,11 @@ const trackingRoutes = require("./routes/trackingRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 
+app.use("/api/projects", trackingRoutes); // Public routes must come first
 app.use("/api/projects", projectRoutes);
 app.use("/api", milestoneRoutes);
 app.use("/api", photoRoutes);
 app.use("/api", documentRoutes);
-app.use("/api/projects", trackingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/health", healthRoutes);
 
