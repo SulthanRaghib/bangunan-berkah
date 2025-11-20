@@ -1,7 +1,12 @@
+// Load environment variables for seeding (SEED_PASSWORD)
+require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
+
+// Plain password to seed users with. Prefer to set via `.env` as `SEED_PASSWORD`.
+const SEED_PASSWORD = process.env.SEED_PASSWORD || "password123";
 
 /**
  * Generate random user data
@@ -80,7 +85,7 @@ function generateUser(index) {
   return {
     name: fullName,
     email: email,
-    password: "password123", // Will be hashed
+    password: SEED_PASSWORD, // Will be hashed
     role: role,
   };
 }
@@ -93,7 +98,7 @@ async function seedUsers(count = 50) {
 
   try {
     // Hash password once (same for all users for simplicity)
-    const hashedPassword = await bcrypt.hash("password123", 10);
+    const hashedPassword = await bcrypt.hash(SEED_PASSWORD, 10);
 
     // Generate user data
     const usersData = [];
@@ -105,14 +110,28 @@ async function seedUsers(count = 50) {
       });
     }
 
-    // Insert users using createMany (faster)
-    const result = await prisma.user.createMany({
-      data: usersData,
-      skipDuplicates: true, // Skip if email already exists
+    // Avoid using createMany with skipDuplicates because it's not supported
+    // for the MongoDB provider in this environment. Instead, check which
+    // emails already exist and insert only the missing users via raw
+    // MongoDB insert command.
+    const emails = usersData.map((u) => u.email);
+    const existing = await prisma.user.findMany({
+      where: { email: { in: emails } },
+      select: { email: true },
     });
+    const existingEmails = existing.map((e) => e.email);
+    const toInsert = usersData.filter((u) => !existingEmails.includes(u.email));
 
-    console.log(`✅ Successfully seeded ${result.count} users!`);
-    return result;
+    if (toInsert.length === 0) {
+      console.log("✅ No new users to insert (all emails already exist).");
+      return { count: 0 };
+    }
+
+    // Use raw insert to avoid transaction/replica-set requirements
+    const insertResult = await prisma.$runCommandRaw({ insert: "users", documents: toInsert });
+    // insertResult may vary; report number inserted using our list length
+    console.log(`✅ Successfully seeded ${toInsert.length} users!`);
+    return { count: toInsert.length };
   } catch (error) {
     console.error("❌ Error seeding users:", error);
     throw error;
@@ -126,7 +145,7 @@ async function seedSpecificUsers() {
   console.log("🌱 Seeding specific admin and test users...");
 
   try {
-    const hashedPassword = await bcrypt.hash("password123", 10);
+    const hashedPassword = await bcrypt.hash(SEED_PASSWORD, 10);
 
     const specificUsers = [
       {
@@ -149,13 +168,13 @@ async function seedSpecificUsers() {
       },
     ];
 
-    // Use upsert to avoid duplicates
+    // Insert if not exists (avoid upsert because it may require transactions on standalone MongoDB)
     for (const user of specificUsers) {
-      await prisma.user.upsert({
-        where: { email: user.email },
-        update: {}, // Don't update if exists
-        create: user,
-      });
+      const existing = await prisma.user.findUnique({ where: { email: user.email } }).catch(() => null);
+      if (!existing) {
+        // Use raw insert to avoid Prisma transaction requirements on standalone MongoDB
+        await prisma.$runCommandRaw({ insert: "users", documents: [user] });
+      }
     }
 
     console.log("✅ Successfully seeded specific users!");
