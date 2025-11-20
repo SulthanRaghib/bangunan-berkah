@@ -445,6 +445,13 @@ exports.updateProjectStatus = async (req, res) => {
         });
         const updated = updatedResult.cursor.firstBatch[0];
 
+        // Clean ObjectId and date formats
+        const startDate = updated.startDate?.$date ? new Date(updated.startDate.$date) : new Date(updated.startDate);
+        const estimatedEndDate = updated.estimatedEndDate?.$date ? new Date(updated.estimatedEndDate.$date) : new Date(updated.estimatedEndDate);
+        const actualEndDate = updated.actualEndDate?.$date ? new Date(updated.actualEndDate.$date) : (updated.actualEndDate ? new Date(updated.actualEndDate) : null);
+        const createdAt = updated.createdAt?.$date ? new Date(updated.createdAt.$date) : new Date(updated.createdAt);
+        const updatedAt = updated.updatedAt?.$date ? new Date(updated.updatedAt.$date) : new Date(updated.updatedAt);
+
         // Log status change activity
         await logProjectActivity(projectCode, {
             userId: req.user.id.toString(),
@@ -457,7 +464,29 @@ exports.updateProjectStatus = async (req, res) => {
         res.status(200).json({
             success: true,
             message: `Status project berhasil diubah menjadi ${status}`,
-            data: updated,
+            data: {
+                id: updated._id?.$oid || updated._id,
+                projectCode: updated.projectCode,
+                projectName: updated.projectName,
+                projectType: updated.projectType,
+                customerName: updated.customerName,
+                customerEmail: updated.customerEmail,
+                customerPhone: updated.customerPhone,
+                customerAddress: updated.customerAddress,
+                budget: updated.budget,
+                startDate: startDate.toISOString(),
+                estimatedEndDate: estimatedEndDate.toISOString(),
+                actualEndDate: actualEndDate ? actualEndDate.toISOString() : null,
+                status: updated.status,
+                progress: updated.progress,
+                createdBy: updated.createdBy,
+                createdByName: updated.createdByName,
+                milestones: updated.milestones || [],
+                documents: updated.documents || [],
+                activities: updated.activities || [],
+                createdAt: createdAt.toISOString(),
+                updatedAt: updatedAt.toISOString(),
+            },
         });
     } catch (err) {
         console.error("Update status error:", err);

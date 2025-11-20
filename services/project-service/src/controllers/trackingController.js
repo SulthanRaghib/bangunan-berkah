@@ -149,9 +149,22 @@ exports.getProjectSummary = async (req, res) => {
 
         const project = projectResult.cursor.firstBatch[0];
 
+        // Clean ObjectId and date formats
+        const startDate = project.startDate?.$date ? new Date(project.startDate.$date) : new Date(project.startDate);
+        const estimatedEndDate = project.estimatedEndDate?.$date ? new Date(project.estimatedEndDate.$date) : new Date(project.estimatedEndDate);
+
         res.status(200).json({
             success: true,
-            data: project,
+            data: {
+                id: project._id?.$oid || project._id,
+                projectCode: project.projectCode,
+                projectName: project.projectName,
+                projectType: project.projectType,
+                status: project.status,
+                progress: project.progress,
+                startDate: startDate.toISOString(),
+                estimatedEndDate: estimatedEndDate.toISOString(),
+            },
         });
     } catch (err) {
         console.error("Get summary error:", err);
