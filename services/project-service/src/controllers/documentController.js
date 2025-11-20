@@ -12,11 +12,24 @@ exports.uploadDocument = async (req, res) => {
             return res.status(400).json({ success: false, message: "File dokumen wajib diupload" });
         }
 
-        const project = await prisma.project.findUnique({ where: { projectCode } });
-        if (!project) {
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
+        });
+
+        if (projectResult.cursor.firstBatch.length === 0) {
             // remove uploaded file
             await deleteFile(req.file.path);
             return res.status(404).json({ success: false, message: "Project tidak ditemukan" });
+        }
+
+        const project = projectResult.cursor.firstBatch[0];
+
+        // Handle user ID from JWT token
+        let userId = null;
+        if (req.user && req.user.id) {
+            userId = typeof req.user.id === 'object' && req.user.id.$oid ? req.user.id.$oid : req.user.id;
         }
 
         const document = {
@@ -24,26 +37,31 @@ exports.uploadDocument = async (req, res) => {
             filename: req.file.filename,
             originalname: req.file.originalname,
             url: `${req.protocol}://${req.get("host")}/uploads/documents/${req.file.filename}`,
-            uploadedBy: req.user ? req.user.id.toString() : null,
+            uploadedBy: userId,
             uploadedAt: new Date(),
             description: req.body.description || null,
         };
 
-        await prisma.project.update({
-            where: { projectCode },
-            data: {
-                documents: { push: document },
-                activities: {
-                    push: {
-                        userId: req.user ? req.user.id.toString() : null,
-                        userName: req.user ? req.user.name || req.user.email : "system",
-                        action: "document_uploaded",
-                        description: `Document uploaded: ${req.file.originalname}`,
-                        metadata: { projectCode, documentId: document.id },
-                        createdAt: new Date(),
-                    },
-                },
-            },
+        const activity = {
+            userId: userId,
+            userName: req.user ? req.user.name || req.user.email : "system",
+            action: "document_uploaded",
+            description: `Document uploaded: ${req.file.originalname}`,
+            metadata: { projectCode, documentId: document.id },
+            createdAt: new Date(),
+        };
+
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $push: {
+                        documents: document,
+                        activities: activity
+                    }
+                }
+            }]
         });
 
         res.status(201).json({ success: true, message: "Document berhasil diupload", data: document });
@@ -59,11 +77,18 @@ exports.uploadDocument = async (req, res) => {
 exports.getDocumentsByProject = async (req, res) => {
     try {
         const { projectCode } = req.params;
-        const project = await prisma.project.findUnique({ where: { projectCode } });
-        if (!project) {
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
+            projection: { documents: 1 }
+        });
+
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({ success: false, message: "Project tidak ditemukan" });
         }
 
+        const project = projectResult.cursor.firstBatch[0];
         res.status(200).json({ success: true, message: "Documents berhasil diambil", data: project.documents || [] });
     } catch (err) {
         console.error("Get documents error:", err);
@@ -77,11 +102,17 @@ exports.getDocumentsByProject = async (req, res) => {
 exports.deleteDocument = async (req, res) => {
     try {
         const { projectCode, documentId } = req.params;
-        const project = await prisma.project.findUnique({ where: { projectCode } });
-        if (!project) {
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
+        });
+
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({ success: false, message: "Project tidak ditemukan" });
         }
 
+        const project = projectResult.cursor.firstBatch[0];
         const idx = project.documents.findIndex((d) => d.id === documentId);
         if (idx === -1) {
             return res.status(404).json({ success: false, message: "Document tidak ditemukan" });
@@ -92,9 +123,18 @@ exports.deleteDocument = async (req, res) => {
         // remove file
         await deleteFile(`uploads/documents/${doc.filename}`);
 
-        project.documents.splice(idx, 1);
-
-        await prisma.project.update({ where: { projectCode }, data: { documents: project.documents } });
+        // Remove document from array using MongoDB $pull
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $pull: {
+                        documents: { id: documentId }
+                    }
+                }
+            }]
+        });
 
         res.status(200).json({ success: true, message: "Document berhasil dihapus" });
     } catch (err) {

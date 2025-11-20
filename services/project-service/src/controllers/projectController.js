@@ -36,9 +36,10 @@ exports.createProject = async (req, res) => {
         // Generate unique project code
         const projectCode = await generateProjectCode();
 
-        // Create project
-        const project = await prisma.project.create({
-            data: {
+        // Create project using raw MongoDB command to avoid transaction requirement
+        const project = await prisma.$runCommandRaw({
+            insert: 'projects',
+            documents: [{
                 projectCode,
                 projectName,
                 description,
@@ -57,27 +58,30 @@ exports.createProject = async (req, res) => {
                 createdByName: req.user.name || req.user.email,
                 milestones: [],
                 documents: [],
-            },
+                activities: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            }]
         });
 
-        // Log activity using central logger
-        await logProjectActivity(projectCode, {
-            userId: req.user.id.toString(),
-            userName: req.user.name || req.user.email,
-            action: "created",
-            description: `Project created by ${req.user.name || req.user.email}`,
-        });
+        // Log activity using central logger (commented out for standalone MongoDB)
+        // await logProjectActivity(projectCode, {
+        //     userId: req.user.id.toString(),
+        //     userName: req.user.name || req.user.email,
+        //     action: "created",
+        //     description: `Project created by ${req.user.name || req.user.email}`,
+        // });
 
         res.status(201).json({
             success: true,
             message: "Project berhasil dibuat",
             data: {
-                projectCode: project.projectCode,
-                projectName: project.projectName,
-                customerName: project.customerName,
-                startDate: project.startDate,
-                estimatedEndDate: project.estimatedEndDate,
-                trackingUrl: `${req.protocol}://${req.get("host")}/api/projects/track/${project.projectCode}`,
+                projectCode: projectCode,
+                projectName: projectName,
+                customerName: customerName,
+                startDate: new Date(startDate),
+                estimatedEndDate: new Date(estimatedEndDate),
+                trackingUrl: `${req.protocol}://${req.get("host")}/api/projects/track/${projectCode}`,
             },
         });
     } catch (err) {
@@ -100,53 +104,82 @@ exports.getAllProjects = async (req, res) => {
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        // Build where clause
-        const where = {};
+        // Build MongoDB filter
+        const filter = {};
 
         if (search) {
-            where.OR = [
-                { projectCode: { contains: search, mode: "insensitive" } },
-                { projectName: { contains: search, mode: "insensitive" } },
-                { customerName: { contains: search, mode: "insensitive" } },
+            filter.$or = [
+                { projectCode: { $regex: search, $options: "i" } },
+                { projectName: { $regex: search, $options: "i" } },
+                { customerName: { $regex: search, $options: "i" } },
             ];
         }
 
         if (status) {
-            where.status = status;
+            filter.status = status;
         }
 
         if (projectType) {
-            where.projectType = projectType;
+            filter.projectType = projectType;
         }
 
-        // Get projects
-        const [projects, total] = await Promise.all([
-            prisma.project.findMany({
-                where,
+        // Build sort order
+        const sort = {};
+        sort[sortBy] = order === "desc" ? -1 : 1;
+
+        // Get projects using raw MongoDB commands
+        const [projectsResult, countResult] = await Promise.all([
+            prisma.$runCommandRaw({
+                find: "projects",
+                filter,
+                sort,
                 skip,
-                take: parseInt(limit),
-                orderBy: { [sortBy]: order },
-                select: {
-                    id: true,
-                    projectCode: true,
-                    projectName: true,
-                    customerName: true,
-                    customerEmail: true,
-                    customerPhone: true,
-                    projectType: true,
-                    status: true,
-                    progress: true,
-                    budget: true,
-                    actualCost: true,
-                    startDate: true,
-                    estimatedEndDate: true,
-                    actualEndDate: true,
-                    createdAt: true,
-                    updatedAt: true,
+                limit: parseInt(limit),
+                projection: {
+                    _id: 1,
+                    projectCode: 1,
+                    projectName: 1,
+                    customerName: 1,
+                    customerEmail: 1,
+                    customerPhone: 1,
+                    projectType: 1,
+                    status: 1,
+                    progress: 1,
+                    budget: 1,
+                    actualCost: 1,
+                    startDate: 1,
+                    estimatedEndDate: 1,
+                    actualEndDate: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
                 },
             }),
-            prisma.project.count({ where }),
+            prisma.$runCommandRaw({
+                count: "projects",
+                query: filter
+            }),
         ]);
+
+        const projects = projectsResult.cursor.firstBatch.map(project => ({
+            id: project._id.$oid || project._id,
+            projectCode: project.projectCode,
+            projectName: project.projectName,
+            customerName: project.customerName,
+            customerEmail: project.customerEmail,
+            customerPhone: project.customerPhone,
+            projectType: project.projectType,
+            status: project.status,
+            progress: project.progress,
+            budget: project.budget,
+            actualCost: project.actualCost,
+            startDate: project.startDate?.$date ? new Date(project.startDate.$date) : new Date(project.startDate),
+            estimatedEndDate: project.estimatedEndDate?.$date ? new Date(project.estimatedEndDate.$date) : new Date(project.estimatedEndDate),
+            actualEndDate: project.actualEndDate?.$date ? new Date(project.actualEndDate.$date) : (project.actualEndDate ? new Date(project.actualEndDate) : null),
+            createdAt: project.createdAt?.$date ? new Date(project.createdAt.$date) : new Date(project.createdAt),
+            updatedAt: project.updatedAt?.$date ? new Date(project.updatedAt.$date) : new Date(project.updatedAt),
+        }));
+
+        const total = countResult.n;
 
         res.status(200).json({
             success: true,
@@ -170,29 +203,63 @@ exports.getProjectByCode = async (req, res) => {
     try {
         const { projectCode } = req.params;
 
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
 
+        const project = projectResult.cursor.firstBatch[0];
+
+        // Convert MongoDB date objects to JavaScript dates
+        const startDate = project.startDate?.$date ? new Date(project.startDate.$date) : new Date(project.startDate);
+        const estimatedEndDate = project.estimatedEndDate?.$date ? new Date(project.estimatedEndDate.$date) : new Date(project.estimatedEndDate);
+        const actualEndDate = project.actualEndDate?.$date ? new Date(project.actualEndDate.$date) : (project.actualEndDate ? new Date(project.actualEndDate) : null);
+        const createdAt = project.createdAt?.$date ? new Date(project.createdAt.$date) : new Date(project.createdAt);
+        const updatedAt = project.updatedAt?.$date ? new Date(project.updatedAt.$date) : new Date(project.updatedAt);
+
         // Calculate additional info
-        const duration = calculateDuration(project.startDate, project.estimatedEndDate);
+        const duration = calculateDuration(startDate, estimatedEndDate);
         const daysRemaining =
-            new Date(project.estimatedEndDate) - new Date() > 0
-                ? Math.ceil((new Date(project.estimatedEndDate) - new Date()) / (1000 * 60 * 60 * 24))
+            estimatedEndDate - new Date() > 0
+                ? Math.ceil((estimatedEndDate - new Date()) / (1000 * 60 * 60 * 24))
                 : 0;
 
         res.status(200).json({
             success: true,
             message: "Project berhasil diambil",
             data: {
-                ...project,
+                id: project._id.$oid || project._id,
+                projectCode: project.projectCode,
+                projectName: project.projectName,
+                description: project.description,
+                projectType: project.projectType,
+                customerName: project.customerName,
+                customerEmail: project.customerEmail,
+                customerPhone: project.customerPhone,
+                customerAddress: project.customerAddress,
+                budget: project.budget,
+                actualCost: project.actualCost,
+                startDate: startDate,
+                estimatedEndDate: estimatedEndDate,
+                actualEndDate: actualEndDate,
+                status: project.status,
+                progress: project.progress,
+                notes: project.notes,
+                createdBy: project.createdBy,
+                createdByName: project.createdByName,
+                milestones: project.milestones,
+                documents: project.documents,
+                activities: project.activities,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 duration: `${duration} hari`,
                 daysRemaining,
                 isOverdue: daysRemaining === 0 && project.status !== "completed",
@@ -254,11 +321,23 @@ exports.updateProject = async (req, res) => {
         if (updateData.status) data.status = updateData.status;
         if (updateData.notes !== undefined) data.notes = updateData.notes;
 
-        // Update
-        const updated = await prisma.project.update({
-            where: { projectCode },
-            data,
+        // Update using raw MongoDB command
+        data.updatedAt = new Date();
+        await prisma.$runCommandRaw({
+            update: 'projects',
+            updates: [{
+                q: { projectCode },
+                u: { $set: data }
+            }]
         });
+
+        // Get updated project for response
+        const updatedResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
+        });
+        const updated = updatedResult.cursor.firstBatch[0];
 
         // Log update activity
         await logProjectActivity(projectCode, {
@@ -291,11 +370,13 @@ exports.deleteProject = async (req, res) => {
         const { projectCode } = req.params;
 
         // Check exists
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
@@ -303,8 +384,12 @@ exports.deleteProject = async (req, res) => {
         }
 
         // Delete
-        await prisma.project.delete({
-            where: { projectCode },
+        await prisma.$runCommandRaw({
+            delete: "projects",
+            deletes: [{
+                q: { projectCode },
+                limit: 1
+            }]
         });
 
         res.status(200).json({
@@ -337,14 +422,28 @@ exports.updateProjectStatus = async (req, res) => {
             });
         }
 
-        // Update
-        const updated = await prisma.project.update({
-            where: { projectCode },
-            data: {
-                status,
-                actualEndDate: status === "completed" ? new Date() : null,
-            },
+        // Update using raw MongoDB command
+        const updateData = {
+            status,
+            actualEndDate: status === "completed" ? new Date() : null,
+            updatedAt: new Date()
+        };
+
+        await prisma.$runCommandRaw({
+            update: 'projects',
+            updates: [{
+                q: { projectCode },
+                u: { $set: updateData }
+            }]
         });
+
+        // Get updated project for response
+        const updatedResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
+        });
+        const updated = updatedResult.cursor.firstBatch[0];
 
         // Log status change activity
         await logProjectActivity(projectCode, {

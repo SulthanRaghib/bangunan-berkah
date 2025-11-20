@@ -18,17 +18,21 @@ exports.addMilestone = async (req, res) => {
             });
         }
 
-        // Check project exists
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        // Check project exists using raw MongoDB command
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         // Check if order already exists
         const existingMilestone = project.milestones.find((m) => m.order === parseInt(order));
@@ -57,24 +61,27 @@ exports.addMilestone = async (req, res) => {
             updatedAt: new Date(),
         };
 
-        // Update project with new milestone
-        const updated = await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: {
-                    push: newMilestone,
-                },
-                activities: {
-                    push: {
-                        userId: req.user.id.toString(),
-                        userName: req.user.name || req.user.email,
-                        action: "milestone_added",
-                        description: `Milestone "${title}" added to project`,
-                        metadata: { milestoneId: newMilestone.id },
-                        createdAt: new Date(),
+        // Update project with new milestone using raw MongoDB command
+        const updated = await prisma.$runCommandRaw({
+            update: 'projects',
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $push: {
+                        milestones: newMilestone,
+                        activities: {
+                            id: require("crypto").randomUUID(),
+                            userId: req.user.id.toString(),
+                            userName: req.user.name || req.user.email,
+                            action: "milestone_added",
+                            description: `Milestone "${title}" added to project`,
+                            metadata: { milestoneId: newMilestone.id },
+                            createdAt: new Date(),
+                        }
                     },
-                },
-            },
+                    $set: { updatedAt: new Date() }
+                }
+            }]
         });
 
         res.status(201).json({
@@ -98,21 +105,25 @@ exports.getMilestonesByProject = async (req, res) => {
     try {
         const { projectCode } = req.params;
 
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
-            select: {
-                projectCode: true,
-                projectName: true,
-                milestones: true,
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
+            projection: {
+                projectCode: 1,
+                projectName: 1,
+                milestones: 1,
             },
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         // Sort milestones by order
         const sortedMilestones = project.milestones.sort((a, b) => a.order - b.order);
@@ -142,16 +153,20 @@ exports.getMilestoneById = async (req, res) => {
     try {
         const { projectCode, milestoneId } = req.params;
 
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         const milestone = project.milestones.find((m) => m.id === milestoneId);
 
@@ -193,17 +208,21 @@ exports.updateMilestoneProgress = async (req, res) => {
             });
         }
 
-        // Get project
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        // Get project using raw MongoDB command
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         // Find and update milestone
         const milestoneIndex = project.milestones.findIndex((m) => m.id === milestoneId);
@@ -243,31 +262,61 @@ exports.updateMilestoneProgress = async (req, res) => {
         const totalProgress = project.milestones.reduce((sum, m) => sum + m.progress, 0);
         const avgProgress = Math.round(totalProgress / project.milestones.length);
 
-        // Update project
-        const updated = await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: project.milestones,
-                progress: avgProgress,
-                activities: {
-                    push: {
-                        userId: req.user.id.toString(),
-                        userName: req.user.name || req.user.email,
-                        action: "milestone_progress_updated",
-                        description: `Milestone "${project.milestones[milestoneIndex].title}" progress updated to ${progress}%`,
-                        metadata: { milestoneId, progress: parseInt(progress), status },
-                        createdAt: new Date(),
+        // Update project using raw MongoDB command
+        const updatedMilestone = {
+            ...project.milestones[milestoneIndex],
+            progress: parseInt(progress),
+            status: status || project.milestones[milestoneIndex].status,
+            notes: notes !== undefined ? notes : project.milestones[milestoneIndex].notes,
+            updatedAt: new Date()
+        };
+
+        // Update actual dates based on status
+        if (status === "in_progress" && !updatedMilestone.actualStartDate) {
+            updatedMilestone.actualStartDate = new Date();
+        }
+
+        if (status === "completed" || parseInt(progress) === 100) {
+            updatedMilestone.status = "completed";
+            updatedMilestone.progress = 100;
+            updatedMilestone.actualEndDate = new Date();
+        }
+
+        // Create new milestones array with updated milestone
+        const newMilestones = [...project.milestones];
+        newMilestones[milestoneIndex] = updatedMilestone;
+
+        const updated = await prisma.$runCommandRaw({
+            update: 'projects',
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $set: {
+                        milestones: newMilestones,
+                        progress: avgProgress,
+                        updatedAt: new Date()
                     },
-                },
-            },
+                    $push: {
+                        activities: {
+                            id: require("crypto").randomUUID(),
+                            userId: req.user.id.toString(),
+                            userName: req.user.name || req.user.email,
+                            action: "milestone_progress_updated",
+                            description: `Milestone "${updatedMilestone.title}" progress updated to ${progress}%`,
+                            metadata: { milestoneId, progress: parseInt(progress), status },
+                            createdAt: new Date(),
+                        }
+                    }
+                }
+            }]
         });
 
         res.status(200).json({
             success: true,
             message: "Progress milestone berhasil diperbarui",
             data: {
-                milestone: updated.milestones[milestoneIndex],
-                projectProgress: updated.progress,
+                milestone: updatedMilestone,
+                projectProgress: avgProgress,
             },
         });
     } catch (err) {
@@ -286,16 +335,20 @@ exports.deleteMilestone = async (req, res) => {
     try {
         const { projectCode, milestoneId } = req.params;
 
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         const milestoneIndex = project.milestones.findIndex((m) => m.id === milestoneId);
 
@@ -317,23 +370,34 @@ exports.deleteMilestone = async (req, res) => {
             ? Math.round(totalProgress / project.milestones.length)
             : 0;
 
-        // Update project
-        await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: project.milestones,
-                progress: avgProgress,
-                activities: {
-                    push: {
-                        userId: req.user.id.toString(),
-                        userName: req.user.name || req.user.email,
-                        action: "milestone_deleted",
-                        description: `Milestone "${deletedMilestone.title}" deleted from project`,
-                        metadata: { milestoneId },
-                        createdAt: new Date(),
+        // Handle user ID from JWT token
+        let userId = null;
+        if (req.user && req.user.id) {
+            userId = typeof req.user.id === 'object' && req.user.id.$oid ? req.user.id.$oid : req.user.id;
+        }
+
+        // Update project using raw MongoDB
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $set: {
+                        milestones: project.milestones,
+                        progress: avgProgress
                     },
-                },
-            },
+                    $push: {
+                        activities: {
+                            userId: userId,
+                            userName: req.user.name || req.user.email,
+                            action: "milestone_deleted",
+                            description: `Milestone "${deletedMilestone.title}" deleted from project`,
+                            metadata: { milestoneId },
+                            createdAt: new Date(),
+                        }
+                    }
+                }
+            }]
         });
 
         res.status(200).json({

@@ -16,17 +16,21 @@ exports.uploadPhoto = async (req, res) => {
             });
         }
 
-        // Get project
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        // Get project using raw MongoDB command
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         // Find milestone
         const milestoneIndex = project.milestones.findIndex((m) => m.id === milestoneId);
@@ -48,26 +52,34 @@ exports.uploadPhoto = async (req, res) => {
             uploadedAt: new Date(),
         };
 
-        // Add photo to milestone
-        project.milestones[milestoneIndex].photos.push(photo);
-        project.milestones[milestoneIndex].updatedAt = new Date();
+        // Add photo to milestone using raw MongoDB command
+        const newMilestones = [...project.milestones];
+        newMilestones[milestoneIndex].photos.push(photo);
+        newMilestones[milestoneIndex].updatedAt = new Date();
 
         // Update project
-        const updated = await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: project.milestones,
-                activities: {
-                    push: {
-                        userId: req.user.id.toString(),
-                        userName: req.user.name || req.user.email,
-                        action: "photo_uploaded",
-                        description: `Photo uploaded to milestone "${project.milestones[milestoneIndex].title}"`,
-                        metadata: { milestoneId, photoId: photo.id },
-                        createdAt: new Date(),
+        const updated = await prisma.$runCommandRaw({
+            update: 'projects',
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $set: {
+                        milestones: newMilestones,
+                        updatedAt: new Date()
                     },
-                },
-            },
+                    $push: {
+                        activities: {
+                            id: require("crypto").randomUUID(),
+                            userId: req.user.id.toString(),
+                            userName: req.user.name || req.user.email,
+                            action: "photo_uploaded",
+                            description: `Photo uploaded to milestone "${project.milestones[milestoneIndex].title}"`,
+                            metadata: { milestoneId, photoId: photo.id },
+                            createdAt: new Date(),
+                        }
+                    }
+                }
+            }]
         });
 
         res.status(201).json({
@@ -91,16 +103,20 @@ exports.getPhotosByMilestone = async (req, res) => {
     try {
         const { projectCode, milestoneId } = req.params;
 
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         const milestone = project.milestones.find((m) => m.id === milestoneId);
 
@@ -135,16 +151,20 @@ exports.deletePhoto = async (req, res) => {
     try {
         const { projectCode, milestoneId, photoId } = req.params;
 
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
+        const projectResult = await prisma.$runCommandRaw({
+            find: "projects",
+            filter: { projectCode },
+            limit: 1,
         });
 
-        if (!project) {
+        if (projectResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Project tidak ditemukan",
             });
         }
+
+        const project = projectResult.cursor.firstBatch[0];
 
         const milestoneIndex = project.milestones.findIndex((m) => m.id === milestoneId);
 
@@ -173,22 +193,33 @@ exports.deletePhoto = async (req, res) => {
         project.milestones[milestoneIndex].photos.splice(photoIndex, 1);
         project.milestones[milestoneIndex].updatedAt = new Date();
 
-        // Update project
-        await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: project.milestones,
-                activities: {
-                    push: {
-                        userId: req.user.id.toString(),
-                        userName: req.user.name || req.user.email,
-                        action: "photo_deleted",
-                        description: `Photo deleted from milestone "${project.milestones[milestoneIndex].title}"`,
-                        metadata: { milestoneId, photoId },
-                        createdAt: new Date(),
+        // Handle user ID from JWT token
+        let userId = null;
+        if (req.user && req.user.id) {
+            userId = typeof req.user.id === 'object' && req.user.id.$oid ? req.user.id.$oid : req.user.id;
+        }
+
+        // Update project using raw MongoDB
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [{
+                q: { projectCode },
+                u: {
+                    $set: {
+                        milestones: project.milestones
                     },
-                },
-            },
+                    $push: {
+                        activities: {
+                            userId: userId,
+                            userName: req.user.name || req.user.email,
+                            action: "photo_deleted",
+                            description: `Photo deleted from milestone "${project.milestones[milestoneIndex].title}"`,
+                            metadata: { milestoneId, photoId },
+                            createdAt: new Date(),
+                        }
+                    }
+                }
+            }]
         });
 
         res.status(200).json({
