@@ -32,6 +32,17 @@ app.use("/api/projects", trackingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/health", healthRoutes);
 
+// Root route: basic service info (helps quick checks at http://localhost:PORT/)
+app.get("/", (req, res) => {
+    const SERVICE_NAME = process.env.SERVICE_NAME || "Project Service";
+    const PORT = process.env.PORT || 8004;
+    res.json({
+        success: true,
+        message: `${SERVICE_NAME} is running on port ${PORT}`,
+        health: `${req.protocol}://${req.get("host")}/api/health`,
+    });
+});
+
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({ success: false, message: "Endpoint tidak ditemukan" });
