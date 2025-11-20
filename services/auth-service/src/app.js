@@ -50,6 +50,9 @@ app.get('/swagger-custom.js', (req, res) => {
                 // Auto-fill the authorization
                 const token = data.accessToken;
                 
+                // Save token to localStorage for cross-service access
+                localStorage.setItem('jwtToken', token);
+                
                 // Use Swagger UI's authorization method
                 setTimeout(() => {
                   try {
@@ -68,7 +71,8 @@ app.get('/swagger-custom.js', (req, res) => {
                       
                       // Show success message
                       console.log('✅ Token otomatis terisi!');
-                      alert('✅ Token berhasil terisi otomatis! Anda sudah bisa menggunakan endpoint yang memerlukan authentication.');
+                      console.log('💾 Token disimpan ke localStorage untuk digunakan di Project Service');
+                      alert('✅ Token berhasil terisi otomatis! Token juga disimpan untuk digunakan di Project Service Swagger (http://localhost:8004/api-docs)');
                     }
                   } catch (e) {
                     console.log('Token dari login:', token);
