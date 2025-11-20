@@ -1,6 +1,8 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpecs = require("./config/swagger");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const healthRoutes = require("./routes/healthRoutes");
@@ -16,6 +18,76 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Swagger Documentation with custom options
+const swaggerUiOptions = {
+  customJs: '/swagger-custom.js',
+  customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
+  swaggerOptions: {
+    persistAuthorization: true, // Persist authorization data after page refresh
+  },
+};
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs, swaggerUiOptions));
+
+// Serve custom JavaScript for Swagger
+app.get('/swagger-custom.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+    // Auto-fill JWT token from login response
+    (function() {
+      // Intercept fetch requests to capture login response
+      const originalFetch = window.fetch;
+      window.fetch = function(...args) {
+        return originalFetch.apply(this, args).then(response => {
+          // Clone response to read body without consuming it
+          const clonedResponse = response.clone();
+          
+          // Check if this is a login request
+          if (args[0] && args[0].includes('/api/auth/login')) {
+            clonedResponse.json().then(data => {
+              if (data.accessToken) {
+                // Auto-fill the authorization
+                const token = data.accessToken;
+                
+                // Use Swagger UI's authorization method
+                setTimeout(() => {
+                  try {
+                    // Try to access Swagger UI instance
+                    if (window.ui) {
+                      window.ui.authActions.authorize({
+                        bearerAuth: {
+                          name: "bearerAuth",
+                          schema: {
+                            type: "http",
+                            scheme: "bearer"
+                          },
+                          value: token
+                        }
+                      });
+                      
+                      // Show success message
+                      console.log('✅ Token otomatis terisi!');
+                      alert('✅ Token berhasil terisi otomatis! Anda sudah bisa menggunakan endpoint yang memerlukan authentication.');
+                    }
+                  } catch (e) {
+                    console.log('Token dari login:', token);
+                  }
+                }, 500);
+              }
+            }).catch(err => {
+              console.error('Error parsing login response:', err);
+            });
+          }
+          
+          return response;
+        });
+      };
+      
+      console.log('🔐 Swagger Auto-Auth aktif! Login untuk auto-fill token.');
+    })();
+  `);
+});
 
 // Routes
 app.use(healthRoutes); // Health check routes
