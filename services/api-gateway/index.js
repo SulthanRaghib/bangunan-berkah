@@ -44,13 +44,11 @@ const REVIEW_SERVICE_URL = process.env.REVIEW_SERVICE_URL || "http://review-serv
 // ========================================
 
 // Helper function for creating proxy
-const createProxy = (target) => {
+const createProxy = (pathFilter, target) => {
   return createProxyMiddleware({
     target,
     changeOrigin: true,
-    pathRewrite: {
-      // Keep original path by default
-    },
+    pathFilter, // v3 uses pathFilter instead of context
     onProxyReq: (proxyReq, req, res) => {
       // Optional: Add custom headers or logging
     },
@@ -65,21 +63,19 @@ const createProxy = (target) => {
 };
 
 // Auth Service
-app.use(["/api/auth", "/api/users"], createProxy(AUTH_SERVICE_URL));
+app.use(createProxy(["/api/auth", "/api/users"], AUTH_SERVICE_URL));
 
 // Product Service
-app.use(["/api/products", "/api/categories", "/api/inventory"], createProxy(PRODUCT_SERVICE_URL));
+app.use(createProxy(["/api/products", "/api/categories", "/api/inventory"], PRODUCT_SERVICE_URL));
 
 // Chat Service
-app.use("/api/chat", createProxy(CHAT_SERVICE_URL));
+app.use(createProxy("/api/chat", CHAT_SERVICE_URL));
 
 // Project Service
-app.use(["/api/projects", "/api/dashboard", "/api/milestones"], createProxy(PROJECT_SERVICE_URL));
+app.use(createProxy(["/api/projects", "/api/dashboard", "/api/milestones"], PROJECT_SERVICE_URL));
 
 // Review Service
-app.use("/api/reviews", createProxy(REVIEW_SERVICE_URL));
-
-// ========================================
+app.use(createProxy("/api/reviews", REVIEW_SERVICE_URL));// ========================================
 // HEALTH CHECK
 // ========================================
 app.get("/", (req, res) => {
