@@ -14,6 +14,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
+// Serve Swagger JSON for Gateway Aggregation
+app.get('/api/projects/api-docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpecs);
+});
+
 // Swagger Documentation with auto-fill token
 const swaggerUiOptions = {
     customJs: '/swagger-custom.js',

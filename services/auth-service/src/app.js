@@ -19,6 +19,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve Swagger JSON for Gateway Aggregation
+app.get('/api/auth/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpecs);
+});
+
 // Swagger Documentation with custom options
 const swaggerUiOptions = {
   customJs: '/swagger-custom.js',

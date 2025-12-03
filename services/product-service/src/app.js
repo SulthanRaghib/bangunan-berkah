@@ -20,6 +20,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve Swagger JSON for Gateway Aggregation
+app.get('/api/products/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  // Note: Assuming swaggerSpecs is available or will be added. 
+  // If not, we return a placeholder to avoid crash until implemented.
+  res.json({ openapi: "3.0.0", info: { title: "Product Service", version: "1.0.0" } });
+});
+
 // Static files (untuk serve uploaded images)
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 

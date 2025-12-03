@@ -4,6 +4,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
+const swaggerUi = require("swagger-ui-express");
 
 dotenv.config();
 
@@ -75,7 +76,27 @@ app.use(createProxy("/api/chat", CHAT_SERVICE_URL));
 app.use(createProxy(["/api/projects", "/api/dashboard", "/api/milestones"], PROJECT_SERVICE_URL));
 
 // Review Service
-app.use(createProxy("/api/reviews", REVIEW_SERVICE_URL));// ========================================
+app.use(createProxy("/api/reviews", REVIEW_SERVICE_URL));
+
+// ========================================
+// SWAGGER UI AGGREGATOR
+// ========================================
+const swaggerOptions = {
+  explorer: true,
+  swaggerOptions: {
+    urls: [
+      { url: "/api/auth/api-docs.json", name: "Auth Service" },
+      { url: "/api/products/api-docs.json", name: "Product Service" },
+      { url: "/api/projects/api-docs.json", name: "Project Service" },
+      { url: "/api/chat/api-docs.json", name: "Chat Service" },
+      { url: "/api/reviews/api-docs.json", name: "Review Service" },
+    ],
+  },
+};
+
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(null, swaggerOptions));
+
+// ========================================
 // HEALTH CHECK
 // ========================================
 app.get("/", (req, res) => {
