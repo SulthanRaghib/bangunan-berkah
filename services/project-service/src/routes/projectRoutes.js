@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const projectController = require("../controllers/projectController");
+const progressController = require("../controllers/progressController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const checkRole = require("../middlewares/roleMiddleware");
+const upload = require("../middlewares/uploadMiddleware");
 
 // All routes require authentication and admin role
 router.use(authMiddleware);
@@ -213,5 +215,47 @@ router.delete("/:projectCode", projectController.deleteProject);
  *         description: Project not found
  */
 router.patch("/:projectCode/status", projectController.updateProjectStatus);
+
+/**
+ * @swagger
+ * /api/projects/{projectCode}/progress:
+ *   post:
+ *     summary: Add weekly progress report (Admin only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - weekNumber
+ *               - progress
+ *               - description
+ *             properties:
+ *               weekNumber:
+ *                 type: integer
+ *               progress:
+ *                 type: number
+ *               description:
+ *                 type: string
+ *               photos:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       201:
+ *         description: Report added successfully
+ */
+router.post("/:projectCode/progress", upload.array("photos", 5), progressController.addWeeklyReport);
 
 module.exports = router;

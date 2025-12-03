@@ -23,7 +23,7 @@ exports.trackProject = async (req, res) => {
                 startDate: 1,
                 estimatedEndDate: 1,
                 actualEndDate: 1,
-                milestones: 1,
+                reports: 1,
                 createdAt: 1,
                 updatedAt: 1,
             },
@@ -51,34 +51,16 @@ exports.trackProject = async (req, res) => {
         const daysRemaining = getDaysRemaining(estimatedEndDate);
         const isOverdue = daysRemaining === 0 && project.status !== "completed";
 
-        // Sort milestones by order and filter photos for public view
-        const sortedMilestones = (project.milestones || [])
-            .sort((a, b) => a.order - b.order)
-            .map((milestone) => ({
-                id: milestone.id,
-                title: milestone.title,
-                description: milestone.description,
-                order: milestone.order,
-                startDate: milestone.startDate,
-                endDate: milestone.endDate,
-                actualStartDate: milestone.actualStartDate,
-                actualEndDate: milestone.actualEndDate,
-                progress: milestone.progress,
-                status: milestone.status,
-                notes: milestone.notes,
-                photos: (milestone.photos || [])
-                    .map(photo => ({
-                        id: photo.id,
-                        url: photo.url,
-                        caption: photo.caption,
-                        uploadedAt: photo.uploadedAt,
-                    }))
-                    .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)),
+        // Sort reports by weekNumber (descending - newest first)
+        const sortedReports = (project.reports || [])
+            .sort((a, b) => b.weekNumber - a.weekNumber)
+            .map((report) => ({
+                weekNumber: report.weekNumber,
+                progress: report.progress,
+                description: report.description,
+                photos: report.photos || [],
+                createdAt: report.createdAt?.$date ? new Date(report.createdAt.$date) : new Date(report.createdAt),
             }));
-
-        // Count completed milestones
-        const completedMilestones = (project.milestones || []).filter((m) => m.status === "completed").length;
-        const totalMilestones = (project.milestones || []).length;
 
         res.status(200).json({
             success: true,
@@ -102,11 +84,8 @@ exports.trackProject = async (req, res) => {
                     duration: `${duration} hari`,
                     daysRemaining,
                     isOverdue,
-                    completedMilestones,
-                    totalMilestones,
-                    milestoneProgress: `${completedMilestones}/${totalMilestones}`,
                 },
-                milestones: sortedMilestones,
+                reports: sortedReports,
             },
         });
     } catch (err) {

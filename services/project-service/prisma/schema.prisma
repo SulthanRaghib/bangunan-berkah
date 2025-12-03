@@ -40,7 +40,7 @@ model Project {
     // Status & Progress
     status String @default("pending") // pending, in_progress, on_hold, completed, cancelled
 
-    progress Int @default(0) // 0-100% (calculated from milestones)
+    progress Float @default(0) // 0-100% (updated via weekly reports)
 
     // Documentation
     contractDocument String? // URL to contract file
@@ -55,7 +55,7 @@ model Project {
     updatedAt DateTime @default(now())
 
     // Relations (Embedded)
-    milestones Milestone[]
+    reports    WeeklyReport[]
     documents  ProjectDocument[]
     activities ProjectActivity[]
 
@@ -63,45 +63,14 @@ model Project {
 }
 
 // ============================================
-// MILESTONE (Tahapan Progres) - Embedded
+// WEEKLY REPORT (Laporan Mingguan) - Embedded
 // ============================================
-type Milestone {
-    id          String  @default(uuid())
-    title       String
-    description String?
-    order       Int // Urutan milestone (1, 2, 3, ...)
-
-    // Timeline
-    startDate       DateTime
-    endDate         DateTime
-    actualStartDate DateTime?
-    actualEndDate   DateTime?
-
-    // Progress
-    progress Int    @default(0) // 0-100%
-    status   String @default("pending") // pending, in_progress, completed, delayed
-
-    // Photos
-    photos MilestonePhoto[]
-
-    // Notes
-    notes String?
-
-    // Timestamps
-    createdAt DateTime @default(now())
-    updatedAt DateTime @default(now())
-}
-
-// ============================================
-// MILESTONE PHOTO - Embedded in Milestone
-// ============================================
-type MilestonePhoto {
-    id         String   @default(uuid())
-    filename   String
-    url        String
-    caption    String?
-    uploadedBy String // User ID
-    uploadedAt DateTime @default(now())
+type WeeklyReport {
+    weekNumber  Int
+    progress    Float // Progress percentage at this week
+    description String
+    photos      String[] // Array of photo URLs
+    createdAt   DateTime @default(now())
 }
 
 // ============================================

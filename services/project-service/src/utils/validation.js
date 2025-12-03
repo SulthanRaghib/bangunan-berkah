@@ -61,29 +61,9 @@ const updateProjectSchema = Joi.object({
 }).min(1);
 
 // ========================================
-// MILESTONE VALIDATION
-// ========================================
-const createMilestoneSchema = Joi.object({
-    title: Joi.string().min(3).max(255).required(),
-    description: Joi.string().max(5000).optional().allow(""),
-    order: Joi.number().integer().positive().required(),
-    startDate: Joi.date().required(),
-    endDate: Joi.date().greater(Joi.ref("startDate")).required(),
-    notes: Joi.string().max(5000).optional().allow(""),
-});
-
-const updateMilestoneProgressSchema = Joi.object({
-    progress: Joi.number().integer().min(0).max(100).required(),
-    status: Joi.string().valid("pending", "in_progress", "completed", "delayed").optional(),
-    notes: Joi.string().max(5000).optional().allow(""),
-});
-
-// ========================================
 // EXPORTS
 // ========================================
 module.exports = {
     validateCreateProject: (data) => createProjectSchema.validate(data),
     validateUpdateProject: (data) => updateProjectSchema.validate(data),
-    validateCreateMilestone: (data) => createMilestoneSchema.validate(data),
-    validateUpdateMilestoneProgress: (data) => updateMilestoneProgressSchema.validate(data),
 };
