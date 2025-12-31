@@ -1,6 +1,24 @@
 const prisma = require("../config/prisma");
 const { v4: uuidv4 } = require("uuid");
 
+// Helper: Serialize for MongoDB Raw Command (Handle Dates)
+const serializeForMongo = (data) => {
+    if (data instanceof Date) {
+        return { $date: data.toISOString() };
+    }
+    if (Array.isArray(data)) {
+        return data.map(serializeForMongo);
+    }
+    if (data !== null && typeof data === "object") {
+        const newObj = {};
+        for (const key in data) {
+            newObj[key] = serializeForMongo(data[key]);
+        }
+        return newObj;
+    }
+    return data;
+};
+
 // Helper: Calculate Project Progress
 const calculateProjectProgress = (milestones) => {
     if (!milestones || milestones.length === 0) return 0;
@@ -49,20 +67,21 @@ const addMilestone = async (req, res) => {
         // 4. Recalculate Progress
         const newProjectProgress = calculateProjectProgress(updatedMilestones);
 
-        // 5. Update Project
-        const updatedProject = await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: updatedMilestones,
-                progress: newProjectProgress,
-                updatedAt: new Date(),
-            },
-            select: {
-                id: true,
-                projectCode: true,
-                progress: true,
-                milestones: true
-            }
+        // 5. Update Project using Raw Command
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [
+                {
+                    q: { projectCode: projectCode },
+                    u: {
+                        $set: {
+                            milestones: serializeForMongo(updatedMilestones),
+                            progress: newProjectProgress,
+                            updatedAt: { $date: new Date().toISOString() }
+                        }
+                    }
+                }
+            ]
         });
 
         res.status(201).json({
@@ -128,20 +147,21 @@ const updateMilestone = async (req, res) => {
         // 3. Recalculate Progress
         const newProjectProgress = calculateProjectProgress(updatedMilestones);
 
-        // 4. Update Project
-        await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: updatedMilestones,
-                progress: newProjectProgress,
-                updatedAt: new Date(),
-            },
-            select: {
-                id: true,
-                projectCode: true,
-                progress: true,
-                milestones: true
-            }
+        // 4. Update Project using Raw Command
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [
+                {
+                    q: { projectCode: projectCode },
+                    u: {
+                        $set: {
+                            milestones: serializeForMongo(updatedMilestones),
+                            progress: newProjectProgress,
+                            updatedAt: { $date: new Date().toISOString() }
+                        }
+                    }
+                }
+            ]
         });
 
         res.json({
@@ -184,20 +204,21 @@ const deleteMilestone = async (req, res) => {
         // 3. Recalculate Progress
         const newProjectProgress = calculateProjectProgress(updatedMilestones);
 
-        // 4. Update Project
-        await prisma.project.update({
-            where: { projectCode },
-            data: {
-                milestones: updatedMilestones,
-                progress: newProjectProgress,
-                updatedAt: new Date(),
-            },
-            select: {
-                id: true,
-                projectCode: true,
-                progress: true,
-                milestones: true
-            }
+        // 4. Update Project using Raw Command
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [
+                {
+                    q: { projectCode: projectCode },
+                    u: {
+                        $set: {
+                            milestones: serializeForMongo(updatedMilestones),
+                            progress: newProjectProgress,
+                            updatedAt: { $date: new Date().toISOString() }
+                        }
+                    }
+                }
+            ]
         });
 
         res.json({
@@ -225,7 +246,11 @@ const getMilestones = async (req, res) => {
 
         if (!project) {
             return res.status(404).json({ success: false, message: "Project not found" });
-        } tones.sort((a, b) => {
+        }
+
+        // Sort milestones by targetDate
+        const milestones = project.milestones || [];
+        const sortedMilestones = milestones.sort((a, b) => {
             return new Date(a.targetDate) - new Date(b.targetDate);
         });
 
