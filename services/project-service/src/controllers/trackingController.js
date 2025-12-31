@@ -23,7 +23,8 @@ exports.trackProject = async (req, res) => {
                 startDate: 1,
                 estimatedEndDate: 1,
                 actualEndDate: 1,
-                reports: 1,
+                milestones: 1,
+                documents: 1,
                 createdAt: 1,
                 updatedAt: 1,
             },
@@ -51,16 +52,33 @@ exports.trackProject = async (req, res) => {
         const daysRemaining = getDaysRemaining(estimatedEndDate);
         const isOverdue = daysRemaining === 0 && project.status !== "completed";
 
-        // Sort reports by weekNumber (descending - newest first)
-        const sortedReports = (project.reports || [])
-            .sort((a, b) => b.weekNumber - a.weekNumber)
-            .map((report) => ({
-                weekNumber: report.weekNumber,
-                progress: report.progress,
-                description: report.description,
-                photos: report.photos || [],
-                createdAt: report.createdAt?.$date ? new Date(report.createdAt.$date) : new Date(report.createdAt),
-            }));
+        // Process Milestones
+        const milestones = (project.milestones || [])
+            .map((m) => ({
+                id: m.id,
+                name: m.name,
+                description: m.description,
+                status: m.status,
+                progress: m.progress,
+                targetDate: m.targetDate?.$date ? new Date(m.targetDate.$date) : new Date(m.targetDate),
+                actualCompletionDate: m.actualCompletionDate?.$date ? new Date(m.actualCompletionDate.$date) : (m.actualCompletionDate ? new Date(m.actualCompletionDate) : null),
+                photos: m.photos || [],
+            }))
+            .sort((a, b) => new Date(a.targetDate) - new Date(b.targetDate));
+
+        // Process Documents
+        const documents = (project.documents || [])
+            .map((d) => ({
+                id: d.id,
+                title: d.title,
+                filename: d.filename,
+                fileType: d.fileType,
+                fileSize: d.fileSize,
+                url: d.url,
+                category: d.category,
+                uploadedAt: d.uploadedAt?.$date ? new Date(d.uploadedAt.$date) : new Date(d.uploadedAt),
+            }))
+            .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
         res.status(200).json({
             success: true,
@@ -85,7 +103,8 @@ exports.trackProject = async (req, res) => {
                     daysRemaining,
                     isOverdue,
                 },
-                reports: sortedReports,
+                milestones: milestones,
+                documents: documents,
             },
         });
     } catch (err) {
