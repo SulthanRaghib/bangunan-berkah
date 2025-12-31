@@ -56,6 +56,7 @@ exports.createProject = async (req, res) => {
                 progress: 0,
                 createdBy: req.user.id.toString(),
                 createdByName: req.user.name || req.user.email,
+                milestones: [],
                 reports: [],
                 documents: [],
                 activities: [],
@@ -218,6 +219,15 @@ exports.getProjectByCode = async (req, res) => {
 
         const project = projectResult.cursor.firstBatch[0];
 
+        // Sort milestones by targetDate
+        if (project.milestones && Array.isArray(project.milestones)) {
+            project.milestones.sort((a, b) => {
+                const dateA = a.targetDate?.$date ? new Date(a.targetDate.$date) : new Date(a.targetDate);
+                const dateB = b.targetDate?.$date ? new Date(b.targetDate.$date) : new Date(b.targetDate);
+                return dateA - dateB;
+            });
+        }
+
         // Convert MongoDB date objects to JavaScript dates
         const startDate = project.startDate?.$date ? new Date(project.startDate.$date) : new Date(project.startDate);
         const estimatedEndDate = project.estimatedEndDate?.$date ? new Date(project.estimatedEndDate.$date) : new Date(project.estimatedEndDate);
@@ -252,6 +262,7 @@ exports.getProjectByCode = async (req, res) => {
                 actualEndDate: actualEndDate,
                 status: project.status,
                 progress: project.progress,
+                milestones: project.milestones || [],
                 notes: project.notes,
                 createdBy: project.createdBy,
                 createdByName: project.createdByName,

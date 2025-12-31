@@ -25,34 +25,51 @@ router.use(checkRole(["admin"]));
  *           schema:
  *             type: object
  *             required:
- *               - name
- *               - clientName
+ *               - projectName
+ *               - projectType
+ *               - customerName
+ *               - customerEmail
+ *               - customerPhone
  *               - startDate
- *               - endDate
+ *               - estimatedEndDate
  *             properties:
- *               name:
+ *               projectName:
  *                 type: string
  *                 example: Pembangunan Rumah Tinggal Tipe 45
  *               description:
  *                 type: string
  *                 example: Proyek pembangunan rumah tinggal di Jakarta Selatan
- *               clientName:
+ *               projectType:
+ *                 type: string
+ *                 enum: [konstruksi, furniture]
+ *                 example: konstruksi
+ *               customerName:
  *                 type: string
  *                 example: Budi Santoso
- *               location:
+ *               customerEmail:
  *                 type: string
- *                 example: Jakarta Selatan
+ *                 format: email
+ *                 example: budi@example.com
+ *               customerPhone:
+ *                 type: string
+ *                 example: "081234567890"
+ *               customerAddress:
+ *                 type: string
+ *                 example: Jl. Sudirman No. 1, Jakarta
  *               startDate:
  *                 type: string
  *                 format: date
  *                 example: 2025-01-15
- *               endDate:
+ *               estimatedEndDate:
  *                 type: string
  *                 format: date
  *                 example: 2025-06-15
  *               budget:
  *                 type: number
  *                 example: 500000000
+ *               notes:
+ *                 type: string
+ *                 example: Catatan tambahan proyek
  *     responses:
  *       201:
  *         description: Project created successfully

@@ -109,12 +109,14 @@ app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
 
 // Routes
 const projectRoutes = require("./routes/projectRoutes");
+const milestoneRoutes = require("./routes/milestoneRoutes");
 const documentRoutes = require("./routes/documentRoutes");
 const trackingRoutes = require("./routes/trackingRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 
 app.use("/api/projects", trackingRoutes); // Public routes must come first
+app.use("/api/projects", milestoneRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api", documentRoutes);
 app.use("/api/dashboard", dashboardRoutes);

@@ -55,11 +55,26 @@ model Project {
     updatedAt DateTime @default(now())
 
     // Relations (Embedded)
+    milestones Milestone[]
     reports    WeeklyReport[]
     documents  ProjectDocument[]
     activities ProjectActivity[]
 
     @@map("projects")
+}
+
+// ============================================
+// MILESTONE - Embedded
+// ============================================
+type Milestone {
+    id                   String    @default(uuid())
+    name                 String
+    description          String?
+    status               String    @default("PENDING") // PENDING, ON_PROGRESS, COMPLETED
+    progress             Int       @default(0) // 0-100
+    targetDate           DateTime
+    actualCompletionDate DateTime?
+    photos               String[]
 }
 
 // ============================================
