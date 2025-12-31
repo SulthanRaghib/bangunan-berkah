@@ -111,6 +111,8 @@ router.get("/:projectCode/milestones", milestoneController.getMilestones);
  *                 type: string
  *               status:
  *                 type: string
+ *                 enum: [PENDING, ON_PROGRESS, COMPLETED]
+ *                 example: PENDING
  *               progress:
  *                 type: integer
  *               targetDate:
