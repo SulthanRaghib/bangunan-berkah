@@ -12,7 +12,7 @@ services:
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
       TZ: ${TZ}
     ports:
-      - "27017:27017"         # host:container
+      - "27017:27017" # host:container
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
@@ -54,12 +54,15 @@ services:
     restart: always
     env_file:
       - ./services/auth-service/.env
+    environment:
+      NODE_PATH: /app/node_modules
     ports:
       - "8001:8001"
     volumes:
       # Mount source code (hot reload)
       - ./services/auth-service:/app
-      - /app/node_modules  # Exclude node_modules
+      - ./shared:/shared
+      - /app/node_modules # Exclude node_modules
     depends_on:
       mongodb:
         condition: service_healthy
@@ -71,7 +74,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    command: npm run dev  # ← Override CMD untuk pakai nodemon
+    command: npm run dev # ← Override CMD untuk pakai nodemon
 
   # 🛒 Product Service
   product-service:
@@ -81,8 +84,14 @@ services:
     restart: always
     env_file:
       - ./services/product-service/.env
+    environment:
+      NODE_PATH: /app/node_modules
     ports:
       - "8002:8002"
+    volumes:
+      - ./services/product-service:/app
+      - ./shared:/shared
+      - /app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
@@ -97,8 +106,14 @@ services:
     restart: always
     env_file:
       - ./services/chat-service/.env
+    environment:
+      NODE_PATH: /app/node_modules
     ports:
       - "8003:8003"
+    volumes:
+      - ./services/chat-service:/app
+      - ./shared:/shared
+      - /app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
@@ -113,8 +128,14 @@ services:
     restart: always
     env_file:
       - ./services/project-service/.env
+    environment:
+      NODE_PATH: /app/node_modules
     ports:
       - "8004:8004"
+    volumes:
+      - ./services/project-service:/app
+      - ./shared:/shared
+      - /app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
@@ -129,8 +150,14 @@ services:
     restart: always
     env_file:
       - ./services/review-service/.env
+    environment:
+      NODE_PATH: /app/node_modules
     ports:
       - "8005:8005"
+    volumes:
+      - ./services/review-service:/app
+      - ./shared:/shared
+      - /app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
@@ -145,8 +172,14 @@ services:
     restart: always
     env_file:
       - ./services/api-gateway/.env
+    environment:
+      NODE_PATH: /app/node_modules
     ports:
       - "8080:8080"
+    volumes:
+      - ./services/api-gateway:/app
+      - ./shared:/shared
+      - /app/node_modules
     depends_on:
       - auth-service
       - product-service

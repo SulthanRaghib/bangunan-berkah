@@ -113,6 +113,22 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    service: "api-gateway",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/health/ready", (req, res) => {
+  res.status(200).json({ ready: true });
+});
+
+app.get("/health/live", (req, res) => {
+  res.status(200).json({ alive: true });
+});
+
 // ========================================
 // START SERVER
 // ========================================
