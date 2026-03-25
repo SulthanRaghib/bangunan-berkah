@@ -273,6 +273,6 @@ router.patch("/:projectCode/status", projectController.updateProjectStatus);
  *       201:
  *         description: Report added successfully
  */
-router.post("/:projectCode/progress", upload.array("photos", 5), progressController.addWeeklyReport);
+router.post("/:projectCode/progress", upload.array("photos", 5), progressController.updateProjectProgress);
 
 module.exports = router;
