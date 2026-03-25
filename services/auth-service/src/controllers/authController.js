@@ -17,7 +17,12 @@
 
 const authService = require("../services/authService");
 const { registerSchema, loginSchema } = require("../utils/validation");
-const { asyncHandler, validate, sendSuccess, sendBadRequest } = require("../../../shared");
+const { asyncHandler, validate, sendSuccess, sendBadRequest, sendError } = require("../../../shared");
+const { verifyRefreshToken } = require("../utils/jwt");
+const {
+  blacklistAccessToken,
+  revokeRefreshToken,
+} = require("../../../../shared/src/utils/token-blacklist.util");
 
 /**
  * Register user
@@ -84,6 +89,7 @@ exports.refreshToken = asyncHandler(async (req, res) => {
   // Response
   return sendSuccess(res, {
     token: result.token,
+    refreshToken: result.refreshToken,
   }, "Token berhasil diperbarui");
 });
 
@@ -109,8 +115,29 @@ exports.getProfile = asyncHandler(async (req, res) => {
  * @returns {Object} { success, message }
  */
 exports.logout = asyncHandler(async (req, res) => {
-  // Untuk stateless JWT, logout dilakukan di client side (hapus token)
-  // Jika pakai Redis/database untuk blacklist token, tambahkan di sini
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith("Bearer ")
+    ? authHeader.split(" ")[1]
+    : null;
+  const providedRefreshToken = req.body?.refreshToken;
+  const exp = req.user?.exp;
+
+  if (!token || !exp) {
+    return sendBadRequest(res, "Token tidak valid untuk logout");
+  }
+
+  try {
+    const revokeTasks = [blacklistAccessToken(token, exp)];
+
+    if (providedRefreshToken) {
+      const decodedRefresh = verifyRefreshToken(providedRefreshToken);
+      revokeTasks.push(revokeRefreshToken(providedRefreshToken, decodedRefresh?.exp));
+    }
+
+    await Promise.all(revokeTasks);
+  } catch (error) {
+    return sendError(res, "Layanan logout sementara tidak tersedia", 503);
+  }
 
   return sendSuccess(res, {}, "Logout berhasil");
 });

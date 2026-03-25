@@ -18,7 +18,18 @@
 
 const userRepository = require("../repositories/userRepository");
 const { hashPassword, comparePassword } = require("../utils/bcrypt");
-const { generateToken, generateRefreshToken } = require("../utils/jwt");
+const {
+    generateToken,
+    generateRefreshToken,
+    verifyRefreshToken,
+    getTokenExpiration,
+} = require("../utils/jwt");
+const {
+    storeRefreshToken,
+    isRefreshTokenActive,
+    isRefreshTokenRevoked,
+    rotateRefreshToken,
+} = require("../../../../shared/src/utils/token-blacklist.util");
 
 class AuthService {
     /**
@@ -59,6 +70,9 @@ class AuthService {
 
             const token = generateToken(tokenPayload);
             const refreshToken = generateRefreshToken(tokenPayload);
+            const refreshTokenExp = getTokenExpiration(refreshToken);
+
+            await storeRefreshToken(refreshToken, refreshTokenExp);
 
             return {
                 user: {
@@ -111,6 +125,9 @@ class AuthService {
 
             const token = generateToken(tokenPayload);
             const refreshToken = generateRefreshToken(tokenPayload);
+            const refreshTokenExp = getTokenExpiration(refreshToken);
+
+            await storeRefreshToken(refreshToken, refreshTokenExp);
 
             return {
                 user: {
@@ -135,10 +152,25 @@ class AuthService {
      */
     async refreshToken(refreshToken) {
         try {
-            const { verifyRefreshToken } = require("../utils/jwt");
-
             // Verify refresh token
             const decoded = verifyRefreshToken(refreshToken);
+
+            if (!decoded) {
+                const error = new Error("Refresh token tidak valid");
+                error.statusCode = 401;
+                throw error;
+            }
+
+            const [isActive, isRevoked] = await Promise.all([
+                isRefreshTokenActive(refreshToken),
+                isRefreshTokenRevoked(refreshToken),
+            ]);
+
+            if (!isActive || isRevoked) {
+                const error = new Error("Refresh token sudah tidak berlaku");
+                error.statusCode = 401;
+                throw error;
+            }
 
             // Get user data
             const user = await userRepository.findById(decoded.id);
@@ -156,9 +188,19 @@ class AuthService {
             };
 
             const newToken = generateToken(tokenPayload);
+            const newRefreshToken = generateRefreshToken(tokenPayload);
+            const newRefreshTokenExp = getTokenExpiration(newRefreshToken);
+
+            await rotateRefreshToken(
+                refreshToken,
+                decoded.exp,
+                newRefreshToken,
+                newRefreshTokenExp
+            );
 
             return {
                 token: newToken,
+                refreshToken: newRefreshToken,
             };
         } catch (error) {
             throw error;

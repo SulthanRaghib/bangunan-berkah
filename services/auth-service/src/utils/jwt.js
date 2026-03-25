@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 /**
  * Generate access token (short-lived)
@@ -6,6 +7,7 @@ const jwt = require("jsonwebtoken");
 function generateToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    jwtid: crypto.randomUUID(),
   });
 }
 
@@ -18,6 +20,7 @@ function generateRefreshToken(payload) {
     process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
     {
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
+      jwtid: crypto.randomUUID(),
     }
   );
 }
@@ -37,14 +40,18 @@ function verifyToken(token) {
  * Verify refresh token
  */
 function verifyRefreshToken(token) {
-  try {
-    return jwt.verify(
-      token,
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
-    );
-  } catch (err) {
-    return null;
-  }
+  return jwt.verify(
+    token,
+    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+  );
+}
+
+/**
+ * Decode token without verification to get exp claim.
+ */
+function getTokenExpiration(token) {
+  const decoded = jwt.decode(token);
+  return decoded?.exp || null;
 }
 
 module.exports = {
@@ -52,4 +59,5 @@ module.exports = {
   generateRefreshToken,
   verifyToken,
   verifyRefreshToken,
+  getTokenExpiration,
 };
