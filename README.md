@@ -310,6 +310,12 @@ TZ=Asia/Jakarta
 MONGO_EXPRESS_USERNAME=admin
 MONGO_EXPRESS_PASSWORD=admin123
 COMPOSE_PROJECT_NAME=pt-solusi-bangunan-berkah
+REDIS_PASSWORD=change-this-redis-password
+AUTH_REDIS_STRICT=true
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=100
+AUTH_RATE_LIMIT_WINDOW_MS=900000
+AUTH_RATE_LIMIT_MAX=20
 ```
 
 **`services/auth-service/.env`:**
@@ -897,6 +903,50 @@ Response 200:
 - Ignore validation di endpoints
 - Share JWT_SECRET across teams
 - Use same JWT_SECRET di berbagai project
+
+### 🔐 Pembaruan Keamanan Redis (Tahap 2–3)
+
+Perubahan keamanan terbaru sudah diimplementasikan untuk meningkatkan kontrol sesi JWT dan proteksi API:
+
+#### 1) Redis sebagai Security State Store
+
+- Redis dipakai sebagai penyimpanan state untuk:
+  - Access token blacklist
+  - Refresh token active/revoked state
+  - Distributed rate limiting counter di API Gateway
+
+#### 2) Access Token Blacklist (Server-Side Logout)
+
+- Saat `POST /api/auth/logout`, access token aktif dimasukkan ke blacklist Redis.
+- Token yang sudah di-blacklist akan ditolak oleh middleware auth (`401`) walaupun belum expired.
+- TTL blacklist mengikuti sisa masa aktif token.
+
+#### 3) Refresh Token Rotation + Revoke
+
+- Endpoint `POST /api/auth/refresh` sekarang:
+  - Memvalidasi refresh token lama (harus aktif dan tidak revoked)
+  - Mengeluarkan **access token baru + refresh token baru**
+  - Merevoke refresh token lama (anti replay attack)
+- Saat logout, refresh token yang dikirim di body juga direvoke.
+
+#### 4) Hardening Fail-Closed / Fail-Open
+
+- **Auth Middleware (Redis blacklist check):**
+  - Mendukung kebijakan per endpoint via env:
+    - `AUTH_REDIS_FAIL_CLOSED_PATHS`
+    - `AUTH_REDIS_FAIL_OPEN_PATHS`
+  - Endpoint sensitif dapat dipaksa fail-closed (`503` jika Redis bermasalah).
+- **API Gateway Rate Limiting:**
+  - Endpoint auth sensitif (`/api/auth/login`, `/api/auth/refresh`, `/api/auth/register`) memakai limiter strict fail-closed.
+  - Endpoint API umum memakai limiter fail-open saat store Redis error agar availability tetap terjaga.
+
+#### 5) Checklist Verifikasi Cepat
+
+1. Login, panggil profile, logout, lalu coba profile lagi dengan access token lama → harus `401`.
+2. Refresh token 1x, simpan refresh token baru, lalu coba pakai refresh token lama lagi → harus `401`.
+3. Cek health gateway dan redis:
+   - `http://localhost:8080/health`
+   - `docker compose ps` (redis status healthy)
 
 ---
 
