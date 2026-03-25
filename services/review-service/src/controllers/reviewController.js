@@ -21,11 +21,13 @@ exports.createReview = async (req, res) => {
         }
 
         // 2. Check if review already exists for this project
-        const existingReview = await prisma.review.findUnique({
-            where: { projectCode },
+        const existingReviewResult = await prisma.$runCommandRaw({
+            find: "reviews",
+            filter: { projectCode },
+            limit: 1,
         });
 
-        if (existingReview) {
+        if (existingReviewResult.cursor.firstBatch.length > 0) {
             return res.status(400).json({
                 success: false,
                 message: "Review already exists for this project",
@@ -79,17 +81,35 @@ exports.createReview = async (req, res) => {
             });
         }
 
-        // 4. Create Review
-        const newReview = await prisma.review.create({
-            data: {
+        // 4. Create Review using raw MongoDB command
+        const { ObjectId } = require("mongodb");
+        const reviewId = new ObjectId();
+
+        await prisma.$runCommandRaw({
+            insert: "reviews",
+            documents: [{
+                _id: reviewId,
                 projectCode,
                 userId,
                 userName,
                 rating,
-                comment,
+                comment: comment || null,
                 photos: photos || [],
-            },
+                createdAt: new Date(),
+            }]
         });
+
+        // Return created review
+        const newReview = {
+            id: reviewId.toString(),
+            projectCode,
+            userId,
+            userName,
+            rating,
+            comment: comment || null,
+            photos: photos || [],
+            createdAt: new Date(),
+        };
 
         res.status(201).json({
             success: true,
@@ -113,20 +133,31 @@ exports.getReviewsByProject = async (req, res) => {
     try {
         const { projectCode } = req.params;
 
-        const review = await prisma.review.findUnique({
-            where: { projectCode },
+        // Get review using raw MongoDB command
+        const reviewResult = await prisma.$runCommandRaw({
+            find: "reviews",
+            filter: { projectCode },
+            limit: 1,
         });
 
-        if (!review) {
+        if (reviewResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "No review found for this project",
             });
         }
 
+        const review = reviewResult.cursor.firstBatch[0];
+        // Convert MongoDB ObjectId to string
+        const formattedReview = {
+            id: review._id.$oid || review._id,
+            ...review,
+            _id: undefined,  // Remove MongoDB _id field
+        };
+
         res.status(200).json({
             success: true,
-            data: review,
+            data: formattedReview,
         });
 
     } catch (err) {
