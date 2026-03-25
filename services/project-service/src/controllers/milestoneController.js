@@ -1,272 +1,136 @@
-const prisma = require("../config/prisma");
-const { v4: uuidv4 } = require("uuid");
+/**
+ * Milestone Controller (Refactored)
+ * Handles milestone-related HTTP requests using services
+ */
 
-// Helper: Serialize for MongoDB Raw Command (Handle Dates)
-const serializeForMongo = (data) => {
-    if (data instanceof Date) {
-        return { $date: data.toISOString() };
-    }
-    if (Array.isArray(data)) {
-        return data.map(serializeForMongo);
-    }
-    if (data !== null && typeof data === "object") {
-        const newObj = {};
-        for (const key in data) {
-            newObj[key] = serializeForMongo(data[key]);
-        }
-        return newObj;
-    }
-    return data;
-};
+const milestoneService = require("../services/milestoneService");
+const { asyncHandler, sendSuccess, sendCreated } = require("../../../shared");
+const { logProjectActivity } = require("../services/activityLogger");
 
-// Helper: Calculate Project Progress
-const calculateProjectProgress = (milestones) => {
-    if (!milestones || milestones.length === 0) return 0;
+/**
+ * ADD MILESTONE
+ * POST /api/projects/:projectCode/milestones
+ */
+exports.addMilestone = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
+    const { title, name, description, detail, targetDate, status, progress, photos } = req.body;
 
-    const totalProgress = milestones.reduce((sum, m) => sum + (m.progress || 0), 0);
-    return Math.round(totalProgress / milestones.length);
-};
+    const result = await milestoneService.addMilestone(projectCode, {
+        title,
+        name,
+        description,
+        detail,
+        targetDate,
+        status,
+        progress,
+        photos,
+    });
 
-// Add Milestone
-const addMilestone = async (req, res) => {
-    try {
-        const { projectCode } = req.params;
-        const { name, description, targetDate, status, progress } = req.body;
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "milestone_added",
+        description: `Milestone added: ${result.milestone.title}`,
+    });
 
-        // 1. Fetch Project (Select specific fields to avoid deserialization errors on other fields)
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
-            select: { milestones: true, status: true }
-        });
+    return sendCreated(
+        res,
+        {
+            milestone: result.milestone,
+            projectProgress: result.projectProgress,
+        },
+        "Milestone berhasil ditambahkan"
+    );
+});
 
-        if (!project) {
-            return res.status(404).json({ success: false, message: "Project not found" });
-        }
+/**
+ * UPDATE MILESTONE
+ * PUT /api/projects/:projectCode/milestones/:milestoneId
+ */
+exports.updateMilestone = asyncHandler(async (req, res) => {
+    const { projectCode, milestoneId } = req.params;
+    const { title, name, description, detail, status, progress, targetDate, actualCompletionDate } = req.body;
 
-        // 2. Create New Milestone Object
-        const newMilestone = {
-            id: uuidv4(),
+    const result = await milestoneService.updateMilestone(
+        projectCode,
+        milestoneId,
+        {
+            title,
             name,
-            description: description || "",
-            status: status || "PENDING",
-            progress: parseInt(progress) || 0,
-            targetDate: new Date(targetDate),
-            actualCompletionDate: null,
-            photos: [],
-        };
-
-        // Validate progress
-        if (newMilestone.progress < 0 || newMilestone.progress > 100) {
-            return res.status(400).json({ success: false, message: "Progress must be between 0 and 100" });
+            description,
+            detail,
+            status,
+            progress,
+            targetDate,
+            actualCompletionDate,
         }
+    );
 
-        // 3. Add to array
-        const currentMilestones = project.milestones || [];
-        const updatedMilestones = [...currentMilestones, newMilestone];
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "milestone_updated",
+        description: `Milestone updated: ${result.milestone.title}`,
+    });
 
-        // 4. Recalculate Progress
-        const newProjectProgress = calculateProjectProgress(updatedMilestones);
+    return sendSuccess(
+        res,
+        {
+            milestone: result.milestone,
+            projectProgress: result.projectProgress,
+        },
+        "Milestone berhasil diperbarui"
+    );
+});
 
-        // 5. Update Project using Raw Command
-        await prisma.$runCommandRaw({
-            update: "projects",
-            updates: [
-                {
-                    q: { projectCode: projectCode },
-                    u: {
-                        $set: {
-                            milestones: serializeForMongo(updatedMilestones),
-                            progress: newProjectProgress,
-                            updatedAt: { $date: new Date().toISOString() }
-                        }
-                    }
-                }
-            ]
-        });
+/**
+ * DELETE MILESTONE
+ * DELETE /api/projects/:projectCode/milestones/:milestoneId
+ */
+exports.deleteMilestone = asyncHandler(async (req, res) => {
+    const { projectCode, milestoneId } = req.params;
 
-        res.status(201).json({
-            success: true,
-            message: "Milestone added successfully",
-            data: {
-                milestone: newMilestone,
-                projectProgress: newProjectProgress,
-            },
-        });
-    } catch (error) {
-        console.error("Error adding milestone:", error);
-        res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
-    }
-};
+    const result = await milestoneService.deleteMilestone(projectCode, milestoneId);
 
-// Update Milestone
-const updateMilestone = async (req, res) => {
-    try {
-        const { projectCode, milestoneId } = req.params;
-        const { name, description, status, progress, targetDate, actualCompletionDate } = req.body;
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "milestone_deleted",
+        description: `Milestone deleted`,
+    });
 
-        // 1. Fetch Project
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
-            select: { milestones: true, status: true }
-        });
+    return sendSuccess(
+        res,
+        {
+            projectProgress: result.projectProgress,
+        },
+        "Milestone berhasil dihapus"
+    );
+});
 
-        if (!project) {
-            return res.status(404).json({ success: false, message: "Project not found" });
-        }
+/**
+ * GET MILESTONES
+ * GET /api/projects/:projectCode/milestones
+ */
+exports.getMilestones = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
 
-        // 2. Find and Update Milestone
-        const milestones = project.milestones || [];
-        const milestoneIndex = milestones.findIndex((m) => m.id === milestoneId);
+    const milestones = await milestoneService.getMilestones(projectCode);
 
-        if (milestoneIndex === -1) {
-            return res.status(404).json({ success: false, message: "Milestone not found" });
-        }
+    return sendSuccess(res, milestones, "Milestones berhasil diambil");
+});
 
-        const currentMilestone = milestones[milestoneIndex];
+/**
+ * GET SINGLE MILESTONE
+ * GET /api/projects/:projectCode/milestones/:milestoneId
+ */
+exports.getMilestone = asyncHandler(async (req, res) => {
+    const { projectCode, milestoneId } = req.params;
 
-        // Update fields
-        const updatedMilestone = {
-            ...currentMilestone,
-            name: name || currentMilestone.name,
-            description: description !== undefined ? description : currentMilestone.description,
-            status: status || currentMilestone.status,
-            progress: progress !== undefined ? parseInt(progress) : currentMilestone.progress,
-            targetDate: targetDate ? new Date(targetDate) : currentMilestone.targetDate,
-            actualCompletionDate: actualCompletionDate ? new Date(actualCompletionDate) : currentMilestone.actualCompletionDate,
-        };
+    const milestone = await milestoneService.getMilestone(projectCode, milestoneId);
 
-        // Validate progress
-        if (updatedMilestone.progress < 0 || updatedMilestone.progress > 100) {
-            return res.status(400).json({ success: false, message: "Progress must be between 0 and 100" });
-        }
-
-        // Update array
-        const updatedMilestones = [...milestones];
-        updatedMilestones[milestoneIndex] = updatedMilestone;
-
-        // 3. Recalculate Progress
-        const newProjectProgress = calculateProjectProgress(updatedMilestones);
-
-        // 4. Update Project using Raw Command
-        await prisma.$runCommandRaw({
-            update: "projects",
-            updates: [
-                {
-                    q: { projectCode: projectCode },
-                    u: {
-                        $set: {
-                            milestones: serializeForMongo(updatedMilestones),
-                            progress: newProjectProgress,
-                            updatedAt: { $date: new Date().toISOString() }
-                        }
-                    }
-                }
-            ]
-        });
-
-        res.json({
-            success: true,
-            message: "Milestone updated successfully",
-            data: {
-                milestone: updatedMilestone,
-                projectProgress: newProjectProgress,
-            },
-        });
-    } catch (error) {
-        console.error("Error updating milestone:", error);
-        res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
-    }
-};
-
-// Delete Milestone
-const deleteMilestone = async (req, res) => {
-    try {
-        const { projectCode, milestoneId } = req.params;
-
-        // 1. Fetch Project (Raw)
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
-            select: { milestones: true, status: true }
-        });
-
-        if (!project) {
-            return res.status(404).json({ success: false, message: "Project not found" });
-        }
-
-        // 2. Filter out the milestone
-        const milestones = project.milestones || [];
-        const updatedMilestones = milestones.filter((m) => m.id !== milestoneId);
-
-        if (updatedMilestones.length === milestones.length) {
-            return res.status(404).json({ success: false, message: "Milestone not found" });
-        }
-
-        // 3. Recalculate Progress
-        const newProjectProgress = calculateProjectProgress(updatedMilestones);
-
-        // 4. Update Project using Raw Command
-        await prisma.$runCommandRaw({
-            update: "projects",
-            updates: [
-                {
-                    q: { projectCode: projectCode },
-                    u: {
-                        $set: {
-                            milestones: serializeForMongo(updatedMilestones),
-                            progress: newProjectProgress,
-                            updatedAt: { $date: new Date().toISOString() }
-                        }
-                    }
-                }
-            ]
-        });
-
-        res.json({
-            success: true,
-            message: "Milestone deleted successfully",
-            data: {
-                projectProgress: newProjectProgress,
-            },
-        });
-    } catch (error) {
-        console.error("Error deleting milestone:", error);
-        res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
-    }
-};
-
-// Get Milestones
-const getMilestones = async (req, res) => {
-    try {
-        const { projectCode } = req.params;
-
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
-            select: { milestones: true },
-        });
-
-        if (!project) {
-            return res.status(404).json({ success: false, message: "Project not found" });
-        }
-
-        // Sort milestones by targetDate
-        const milestones = project.milestones || [];
-        const sortedMilestones = milestones.sort((a, b) => {
-            return new Date(a.targetDate) - new Date(b.targetDate);
-        });
-
-        res.json({
-            success: true,
-            data: sortedMilestones,
-        });
-    } catch (error) {
-        console.error("Error fetching milestones:", error);
-        res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
-    }
-};
-
-module.exports = {
-    getMilestones,
-    addMilestone,
-    updateMilestone,
-    deleteMilestone,
-};
+    return sendSuccess(res, milestone, "Milestone berhasil diambil");
+});

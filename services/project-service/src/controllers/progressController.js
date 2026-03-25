@@ -1,94 +1,55 @@
-const prisma = require("../config/prisma");
-const fs = require("fs");
-const path = require("path");
+/**
+ * Progress Controller (Refactored)
+ * Handles progress-related HTTP requests using services
+ */
 
-const addWeeklyReport = async (req, res) => {
-    try {
-        const { projectCode } = req.params;
-        const { weekNumber, progress, description } = req.body;
-        const files = req.files || [];
+const progressService = require("../services/progressService");
+const { asyncHandler, sendSuccess } = require("../../../shared");
+const { logProjectActivity } = require("../services/activityLogger");
 
-        // 1. Validate Input
-        if (!weekNumber || progress === undefined || !description) {
-            return res.status(400).json({ message: "Week number, progress, and description are required" });
-        }
+/**
+ * GET MILESTONE PROGRESS
+ * GET /api/projects/:projectCode/milestones/:milestoneId/progress
+ */
+exports.getMilestoneProgress = asyncHandler(async (req, res) => {
+    const { projectCode, milestoneId } = req.params;
 
-        // 2. Check if project exists
-        const project = await prisma.project.findUnique({
-            where: { projectCode },
-        });
+    const progress = await progressService.getMilestoneProgress(
+        projectCode,
+        milestoneId
+    );
 
-        if (!project) {
-            return res.status(404).json({ message: "Project not found" });
-        }
+    return sendSuccess(res, progress, "Milestone progress berhasil diambil");
+});
 
-        // 3. Check if week number already exists
-        const existingReport = project.reports?.find((r) => r.weekNumber === parseInt(weekNumber));
-        if (existingReport) {
-            return res.status(400).json({ message: `Report for week ${weekNumber} already exists` });
-        }
+/**
+ * UPDATE PROJECT PROGRESS
+ * PUT /api/projects/:projectCode/progress
+ */
+exports.updateProjectProgress = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
 
-        // 4. Process Files
-        const photoUrls = files.map((file) => `/uploads/photos/${file.filename}`);
+    const progress = await progressService.updateProjectProgress(projectCode);
 
-        // 5. Construct Report Object for MongoDB Raw Command
-        const newReportRaw = {
-            weekNumber: parseInt(weekNumber),
-            progress: parseFloat(progress),
-            description,
-            photos: photoUrls,
-            createdAt: { $date: new Date().toISOString() },
-        };
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "progress_updated",
+        description: `Project progress updated to ${progress.progress}%`,
+    });
 
-        // 6. Atomic Update using runCommandRaw
-        const result = await prisma.$runCommandRaw({
-            update: "projects",
-            updates: [
-                {
-                    q: { projectCode: projectCode },
-                    u: {
-                        $push: { reports: newReportRaw },
-                        $set: {
-                            progress: parseFloat(progress),
-                            updatedAt: { $date: new Date().toISOString() }
-                        },
-                    },
-                },
-            ],
-        });
+    return sendSuccess(res, progress, "Project progress berhasil diperbarui");
+});
 
-        // Check result
-        // MongoDB update command returns { n: 1, nModified: 1, ok: 1 }
-        if (result.nModified === 0) {
-            return res.status(500).json({ message: "Failed to update project" });
-        }
+/**
+ * GET PROGRESS REPORT
+ * GET /api/projects/:projectCode/progress/report
+ */
+exports.getProgressReport = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
 
-        // 7. Return Response
-        res.status(201).json({
-            message: "Weekly report added successfully",
-            data: {
-                weekNumber: parseInt(weekNumber),
-                progress: parseFloat(progress),
-                description,
-                photos: photoUrls,
-                createdAt: new Date()
-            },
-        });
+    const report = await progressService.getProgressReport(projectCode);
 
-    } catch (error) {
-        console.error(error);
-        // Cleanup files if error
-        if (req.files) {
-            req.files.forEach((file) => {
-                fs.unlink(file.path, (err) => {
-                    if (err) console.error("Failed to delete file:", err);
-                });
-            });
-        }
-        res.status(500).json({ message: "Internal Server Error", error: error.message });
-    }
-};
-
-module.exports = {
-    addWeeklyReport,
-};
+    return sendSuccess(res, report, "Progress report berhasil diambil");
+});

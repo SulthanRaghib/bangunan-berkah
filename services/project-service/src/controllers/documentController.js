@@ -1,144 +1,92 @@
-const prisma = require("../config/prisma");
+/**
+ * Document Controller (Refactored)
+ * Handles document-related HTTP requests using services
+ */
+
+const documentService = require("../services/documentService");
+const { asyncHandler, sendSuccess, sendCreated } = require("../../../shared");
 const { deleteFile } = require("../utils/fileHandler");
+const { logProjectActivity } = require("../services/activityLogger");
 
-// ========================================
-// UPLOAD DOCUMENT TO PROJECT
-// ========================================
-exports.uploadDocument = async (req, res) => {
-    try {
-        const { projectCode } = req.params;
-
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: "File dokumen wajib diupload" });
-        }
-
-        const projectResult = await prisma.$runCommandRaw({
-            find: "projects",
-            filter: { projectCode },
-            limit: 1,
-        });
-
-        if (projectResult.cursor.firstBatch.length === 0) {
-            // remove uploaded file
-            await deleteFile(req.file.path);
-            return res.status(404).json({ success: false, message: "Project tidak ditemukan" });
-        }
-
-        const project = projectResult.cursor.firstBatch[0];
-
-        // Handle user ID from JWT token
-        let userId = null;
-        if (req.user && req.user.id) {
-            userId = typeof req.user.id === 'object' && req.user.id.$oid ? req.user.id.$oid : req.user.id;
-        }
-
-        const document = {
-            id: require("crypto").randomUUID(),
-            filename: req.file.filename,
-            originalname: req.file.originalname,
-            url: `${req.protocol}://${req.get("host")}/uploads/documents/${req.file.filename}`,
-            uploadedBy: userId,
-            uploadedAt: new Date(),
-            description: req.body.description || null,
-        };
-
-        const activity = {
-            userId: userId,
-            userName: req.user ? req.user.name || req.user.email : "system",
-            action: "document_uploaded",
-            description: `Document uploaded: ${req.file.originalname}`,
-            metadata: { projectCode, documentId: document.id },
-            createdAt: new Date(),
-        };
-
-        await prisma.$runCommandRaw({
-            update: "projects",
-            updates: [{
-                q: { projectCode },
-                u: {
-                    $push: {
-                        documents: document,
-                        activities: activity
-                    }
-                }
-            }]
-        });
-
-        res.status(201).json({ success: true, message: "Document berhasil diupload", data: document });
-    } catch (err) {
-        console.error("Upload document error:", err);
-        res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+/**
+ * UPLOAD DOCUMENT TO PROJECT
+ * POST /api/projects/:projectCode/documents
+ */
+exports.uploadDocument = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        throw new Error("File dokumen wajib diupload");
     }
-};
 
-// ========================================
-// LIST DOCUMENTS BY PROJECT
-// ========================================
-exports.getDocumentsByProject = async (req, res) => {
-    try {
-        const { projectCode } = req.params;
-        const projectResult = await prisma.$runCommandRaw({
-            find: "projects",
-            filter: { projectCode },
-            limit: 1,
-            projection: { documents: 1 }
-        });
+    const userId = req.user?.id?.toString() || req.user?.id || null;
 
-        if (projectResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({ success: false, message: "Project tidak ditemukan" });
-        }
+    const document = await documentService.addDocument(req.params.projectCode, {
+        name: req.file.originalname,
+        type: req.file.mimetype,
+        fileUrl: `${req.protocol}://${req.get("host")}/uploads/documents/${req.file.filename}`,
+        fileSize: req.file.size,
+        uploadedBy: userId,
+        uploadedByName: req.user?.name || req.user?.email || "system",
+        description: req.body.description || null,
+    });
 
-        const project = projectResult.cursor.firstBatch[0];
-        res.status(200).json({ success: true, message: "Documents berhasil diambil", data: project.documents || [] });
-    } catch (err) {
-        console.error("Get documents error:", err);
-        res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
-    }
-};
+    // Log activity
+    await logProjectActivity(req.params.projectCode, {
+        userId: userId,
+        userName: req.user?.name || req.user?.email || "system",
+        action: "document_uploaded",
+        description: `Document uploaded: ${req.file.originalname}`,
+    });
 
-// ========================================
-// DELETE DOCUMENT
-// ========================================
-exports.deleteDocument = async (req, res) => {
-    try {
-        const { projectCode, documentId } = req.params;
-        const projectResult = await prisma.$runCommandRaw({
-            find: "projects",
-            filter: { projectCode },
-            limit: 1,
-        });
+    return sendCreated(res, document, "Document berhasil diupload");
+});
 
-        if (projectResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({ success: false, message: "Project tidak ditemukan" });
-        }
+/**
+ * GET DOCUMENTS BY PROJECT
+ * GET /api/projects/:projectCode/documents
+ */
+exports.getDocumentsByProject = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
 
-        const project = projectResult.cursor.firstBatch[0];
-        const idx = project.documents.findIndex((d) => d.id === documentId);
-        if (idx === -1) {
-            return res.status(404).json({ success: false, message: "Document tidak ditemukan" });
-        }
+    const documents = await documentService.getDocuments(projectCode);
 
-        const doc = project.documents[idx];
+    return sendSuccess(res, documents, "Documents berhasil diambil");
+});
 
-        // remove file
-        await deleteFile(`uploads/documents/${doc.filename}`);
+/**
+ * GET SINGLE DOCUMENT
+ * GET /api/projects/:projectCode/documents/:documentId
+ */
+exports.getDocument = asyncHandler(async (req, res) => {
+    const { projectCode, documentId } = req.params;
 
-        // Remove document from array using MongoDB $pull
-        await prisma.$runCommandRaw({
-            update: "projects",
-            updates: [{
-                q: { projectCode },
-                u: {
-                    $pull: {
-                        documents: { id: documentId }
-                    }
-                }
-            }]
-        });
+    const document = await documentService.getDocument(projectCode, documentId);
 
-        res.status(200).json({ success: true, message: "Document berhasil dihapus" });
-    } catch (err) {
-        console.error("Delete document error:", err);
-        res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
-    }
-};
+    return sendSuccess(res, document, "Document berhasil diambil");
+});
+
+/**
+ * DELETE DOCUMENT
+ * DELETE /api/projects/:projectCode/documents/:documentId
+ */
+exports.deleteDocument = asyncHandler(async (req, res) => {
+    const { projectCode, documentId } = req.params;
+
+    // Get document info first (to delete file)
+    const document = await documentService.getDocument(projectCode, documentId);
+
+    // Delete file from storage
+    await deleteFile(`uploads/documents/${document.fileUrl?.split("/").pop() || document.filename}`);
+
+    // Delete document from database
+    await documentService.deleteDocument(projectCode, documentId);
+
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user?.id?.toString() || req.user?.id || null,
+        userName: req.user?.name || req.user?.email || "system",
+        action: "document_deleted",
+        description: `Document deleted: ${document.name}`,
+    });
+
+    return sendSuccess(res, null, "Document berhasil dihapus");
+});
