@@ -4,6 +4,8 @@ const morgan = require("morgan");
 const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 const reviewRoutes = require("./routes/reviewRoutes");
+const testimonialRoutes = require("./routes/testimonialRoutes");
+const qaRoutes = require("./routes/qaRoutes");
 
 const app = express();
 
@@ -52,6 +54,8 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Routes
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/testimonials", testimonialRoutes);
+app.use("/api/qa", qaRoutes);
 
 // Health Check
 app.get("/health", (req, res) => {
