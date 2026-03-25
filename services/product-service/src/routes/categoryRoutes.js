@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const categoryController = require("../controllers/categoryController");
-const authMiddleware = require("../middlewares/authMiddleware");
-const checkRole = require("../middlewares/roleMiddleware");
+const { authMiddleware, roleMiddleware } = require("../../../../shared");
 
 // ========================================
 // PUBLIC ROUTES
@@ -16,21 +15,21 @@ router.get("/:id", categoryController.getCategoryById);
 router.post(
   "/",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   categoryController.createCategory
 );
 
 router.put(
   "/:id",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   categoryController.updateCategory
 );
 
 router.delete(
   "/:id",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   categoryController.deleteCategory
 );
 

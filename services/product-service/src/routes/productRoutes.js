@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const productController = require("../controllers/productController");
-const authMiddleware = require("../middlewares/authMiddleware");
-const checkRole = require("../middlewares/roleMiddleware");
+const { authMiddleware, roleMiddleware } = require("../../../../shared");
 const upload = require("../middlewares/uploadMiddleware");
 
 // ========================================
@@ -19,7 +18,7 @@ router.get("/:id", productController.getProductById);
 router.post(
   "/",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   upload.array("images", 5),
   productController.createProduct
 );
@@ -27,7 +26,7 @@ router.post(
 router.put(
   "/:id",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   upload.array("images", 5),
   productController.updateProduct
 );
@@ -35,21 +34,21 @@ router.put(
 router.delete(
   "/:id",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   productController.deleteProduct
 );
 
 router.patch(
   "/:id/featured",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   productController.toggleFeatured
 );
 
 router.patch(
   "/:id/active",
   authMiddleware,
-  checkRole(["admin"]),
+  roleMiddleware(["admin"]),
   productController.toggleActive
 );
 
