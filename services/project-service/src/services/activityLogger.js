@@ -37,12 +37,18 @@ async function logProjectActivity(projectCode, activityPayload = {}) {
     const activity = createActivity(activityPayload);
 
     try {
-        const res = await prisma.project.update({
-            where: { projectCode },
-            data: {
-                activities: { push: activity },
-                updatedAt: new Date(),
-            },
+        // Use raw MongoDB command to avoid transaction requirement for replica sets
+        await prisma.$runCommandRaw({
+            update: "projects",
+            updates: [
+                {
+                    q: { projectCode: projectCode },
+                    u: {
+                        $push: { activities: activity },
+                        $set: { updatedAt: new Date() }
+                    }
+                }
+            ]
         });
 
         return activity;
