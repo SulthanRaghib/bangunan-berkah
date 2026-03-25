@@ -1,26 +1,38 @@
-const prisma = require("../config/prisma");
 const axios = require("axios");
-const { validateCreateReview } = require("../utils/validation");
+const Joi = require("joi");
+const { ObjectId } = require("mongodb");
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
+
+// Validation Schema
+const reviewSchema = Joi.object({
+    projectCode: Joi.string().required().trim(),
+    customerName: Joi.string().required().min(3).max(100),
+    customerEmail: Joi.string().email().required(),
+    rating: Joi.number().integer().min(1).max(5).required(),
+    comment: Joi.string().optional().max(2000),
+    photos: Joi.array().items(Joi.string()).optional(),
+});
 
 // ========================================
-// CREATE REVIEW
+// CREATE REVIEW (Public - No Auth Required)
 // ========================================
 exports.createReview = async (req, res) => {
     try {
-        const { projectCode, rating, comment, photos } = req.body;
-        const userId = req.user.id;
-        const userName = req.user.name || req.user.email; // Fallback if name not in token
+        const { error, value } = reviewSchema.validate(req.body);
 
-        // 1. Validate Input
-        const { error } = validateCreateReview(req.body);
         if (error) {
             return res.status(400).json({
                 success: false,
-                message: error.details[0].message,
+                message: "Validation error",
+                errors: error.details.map((e) => e.message),
             });
         }
 
-        // 2. Check if review already exists for this project
+        const { projectCode, customerName, customerEmail, rating, comment, photos } = value;
+
+        // 1. Check if review already exists for this project
         const existingReviewResult = await prisma.$runCommandRaw({
             find: "reviews",
             filter: { projectCode },
@@ -30,20 +42,14 @@ exports.createReview = async (req, res) => {
         if (existingReviewResult.cursor.firstBatch.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: "Review already exists for this project",
+                message: "Review already exists for this project. One review per project allowed.",
             });
         }
 
-        // 3. Verify Project Status via Project Service
-        // Internal Docker URL: http://project-service:8004
+        // 2. Verify Project Status via Project Service
         const projectServiceUrl = process.env.PROJECT_SERVICE_URL || "http://project-service:8004";
 
         try {
-            // We need to pass the auth token to project-service if the endpoint is protected.
-            // However, the summary endpoint is PUBLIC according to the prompt/context.
-            // "GET /:projectCode (Public) -> getReviewsByProject" - wait, that's review service.
-            // In project service: "GET /summary/:projectCode" is Public.
-
             const projectResponse = await axios.get(`${projectServiceUrl}/api/projects/summary/${projectCode}`);
             const projectData = projectResponse.data.data;
 
@@ -57,21 +63,14 @@ exports.createReview = async (req, res) => {
             if (projectData.status !== "completed") {
                 return res.status(400).json({
                     success: false,
-                    message: "Project must be completed to submit a review",
+                    message: "Project must be completed before you can submit a review",
                 });
             }
-
-            // Optional: Verify if the user is the customer of the project?
-            // The prompt says "A user can only submit one review per project" and "The user must be authenticated (Customer role)".
-            // It doesn't explicitly say we must check if req.user.id matches project.customerId.
-            // But it's good practice. However, project summary might not return customerId.
-            // Let's stick to the prompt requirements: "Verify if projectCode exists and status === 'completed'".
-
         } catch (err) {
             if (err.response && err.response.status === 404) {
                 return res.status(404).json({
                     success: false,
-                    message: "Project not found in Project Service",
+                    message: "Project not found",
                 });
             }
             console.error("Error communicating with Project Service:", err.message);
@@ -81,8 +80,7 @@ exports.createReview = async (req, res) => {
             });
         }
 
-        // 4. Create Review using raw MongoDB command
-        const { ObjectId } = require("mongodb");
+        // 3. Create Review using raw MongoDB command
         const reviewId = new ObjectId();
 
         await prisma.$runCommandRaw({
@@ -90,21 +88,20 @@ exports.createReview = async (req, res) => {
             documents: [{
                 _id: reviewId,
                 projectCode,
-                userId,
-                userName,
+                customerName,
+                customerEmail,
                 rating,
                 comment: comment || null,
                 photos: photos || [],
                 createdAt: new Date(),
-            }]
+            }],
         });
 
-        // Return created review
         const newReview = {
             id: reviewId.toString(),
             projectCode,
-            userId,
-            userName,
+            customerName,
+            customerEmail,
             rating,
             comment: comment || null,
             photos: photos || [],
@@ -113,27 +110,26 @@ exports.createReview = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: "Review created successfully",
+            message: "Review submitted successfully!",
             data: newReview,
         });
-
-    } catch (err) {
-        console.error("Create review error:", err);
+    } catch (error) {
+        console.error("Error creating review:", error);
         res.status(500).json({
             success: false,
-            message: "Internal Server Error",
+            message: "Failed to submit review",
+            error: error.message,
         });
     }
 };
 
 // ========================================
-// GET REVIEWS BY PROJECT (Public)
+// GET REVIEW BY PROJECT (Public)
 // ========================================
 exports.getReviewsByProject = async (req, res) => {
     try {
         const { projectCode } = req.params;
 
-        // Get review using raw MongoDB command
         const reviewResult = await prisma.$runCommandRaw({
             find: "reviews",
             filter: { projectCode },
@@ -143,28 +139,33 @@ exports.getReviewsByProject = async (req, res) => {
         if (reviewResult.cursor.firstBatch.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: "No review found for this project",
+                message: "No review found for this project yet",
             });
         }
 
         const review = reviewResult.cursor.firstBatch[0];
-        // Convert MongoDB ObjectId to string
+
         const formattedReview = {
             id: review._id.$oid || review._id,
-            ...review,
-            _id: undefined,  // Remove MongoDB _id field
+            projectCode: review.projectCode,
+            customerName: review.customerName,
+            customerEmail: review.customerEmail,
+            rating: review.rating,
+            comment: review.comment,
+            photos: review.photos,
+            createdAt: review.createdAt,
         };
 
         res.status(200).json({
             success: true,
             data: formattedReview,
         });
-
-    } catch (err) {
-        console.error("Get review error:", err);
+    } catch (error) {
+        console.error("Error fetching review:", error);
         res.status(500).json({
             success: false,
-            message: "Internal Server Error",
+            message: "Failed to fetch review",
+            error: error.message,
         });
     }
 };

@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const reviewController = require("../controllers/reviewController");
-const authMiddleware = require("../middlewares/authMiddleware");
 
 /**
  * @swagger
@@ -14,10 +13,8 @@ const authMiddleware = require("../middlewares/authMiddleware");
  * @swagger
  * /api/reviews:
  *   post:
- *     summary: Create a new review (Customer only)
+ *     summary: Submit a project review (Public - No Login Required)
  *     tags: [Reviews]
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -26,27 +23,42 @@ const authMiddleware = require("../middlewares/authMiddleware");
  *             type: object
  *             required:
  *               - projectCode
+ *               - customerName
+ *               - customerEmail
  *               - rating
  *             properties:
  *               projectCode:
  *                 type: string
+ *                 description: Unique project code (e.g., PRJ-2026-001)
+ *               customerName:
+ *                 type: string
+ *                 description: Customer name
+ *               customerEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Customer email
  *               rating:
  *                 type: integer
  *                 minimum: 1
  *                 maximum: 5
+ *                 description: Rating score 1-5
  *               comment:
  *                 type: string
+ *                 description: Review comment (optional)
  *               photos:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: Photo URLs or base64 strings (optional)
  *     responses:
  *       201:
- *         description: Review created successfully
+ *         description: Review submitted successfully
  *       400:
  *         description: Validation error or Project not completed
+ *       404:
+ *         description: Project not found
  */
-router.post("/", authMiddleware, reviewController.createReview);
+router.post("/", reviewController.createReview);
 
 /**
  * @swagger
@@ -60,11 +72,12 @@ router.post("/", authMiddleware, reviewController.createReview);
  *         required: true
  *         schema:
  *           type: string
+ *         description: Project code to get review for
  *     responses:
  *       200:
- *         description: Review details
+ *         description: Review details with rating and comment
  *       404:
- *         description: Review not found
+ *         description: No review found for this project
  */
 router.get("/:projectCode", reviewController.getReviewsByProject);
 
