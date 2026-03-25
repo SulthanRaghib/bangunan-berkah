@@ -2,6 +2,10 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const path = require("path");
+const swaggerSpecs = require("./config/swagger");
+
+// Import shared middleware
+const { errorHandler, notFoundHandler, asyncHandler } = require("../../../shared");
 
 // Import routes
 const productRoutes = require("./routes/productRoutes");
@@ -23,9 +27,7 @@ app.use(express.urlencoded({ extended: true }));
 // Serve Swagger JSON for Gateway Aggregation
 app.get('/api/products/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  // Note: Assuming swaggerSpecs is available or will be added. 
-  // If not, we return a placeholder to avoid crash until implemented.
-  res.json({ openapi: "3.0.0", info: { title: "Product Service", version: "1.0.0" } });
+  res.send(swaggerSpecs);
 });
 
 // Static files (untuk serve uploaded images)
@@ -40,7 +42,7 @@ app.use("/api/categories", categoryRoutes); // Category routes
 app.use("/api/inventory", inventoryRoutes); // Inventory routes
 
 // Root endpoint
-app.get("/", (req, res) => {
+app.get("/", asyncHandler(async (req, res) => {
   res.json({
     service: "Product Service",
     version: "1.0.0",
@@ -52,62 +54,18 @@ app.get("/", (req, res) => {
       inventory: "/api/inventory",
     },
   });
-});
+}));
 
-// ============================================
-// 404 Handler
-// ============================================
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Endpoint tidak ditemukan",
-    path: req.path,
-  });
-});
+/**
+ * ============================================
+ * GLOBAL MIDDLEWARE
+ * ============================================
+ */
 
-// ============================================
-// Error Handler
-// ============================================
-app.use((err, req, res, next) => {
-  console.error("Error:", err);
+// 404 handler (dari shared)
+app.use(notFoundHandler);
 
-  // Multer error (file upload)
-  if (err.code === "LIMIT_FILE_SIZE") {
-    return res.status(400).json({
-      success: false,
-      message: "File terlalu besar. Maksimal 5MB per file",
-    });
-  }
-
-  if (err.message && err.message.includes("file")) {
-    return res.status(400).json({
-      success: false,
-      message: err.message,
-    });
-  }
-
-  // Prisma error
-  if (err.code === "P2002") {
-    return res.status(400).json({
-      success: false,
-      message: "Data sudah ada (duplicate)",
-      field: err.meta?.target,
-    });
-  }
-
-  if (err.code === "P2025") {
-    return res.status(404).json({
-      success: false,
-      message: "Data tidak ditemukan",
-    });
-  }
-
-  // Generic error
-  res.status(500).json({
-    success: false,
-    message: "Terjadi kesalahan server",
-    error: process.env.NODE_ENV === "development" ? err.message : undefined,
-  });
-});
+// Global error handler (dari shared) - HARUS paling akhir
+app.use(errorHandler);
 
 module.exports = app;
