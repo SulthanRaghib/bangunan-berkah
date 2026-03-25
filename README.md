@@ -80,11 +80,30 @@
 - Notification system
 - Chat history & persistence
 
-### ⭐ **Sistem Review & Rating**
+### ⭐ **Sistem Review, Rating, Testimoni & Q&A**
+
+#### Project Reviews
 
 - Submit review untuk proyek yang selesai
-- Rating aggregation
-- Review verification
+- Rating agregasi (1-5 stars)
+- Review verification dengan project status check
+- One review per project tracking
+
+#### Testimonials (Non-Project)
+
+- Pelanggan dapat submit testimoni tanpa login
+- Support foto/media dokumentasi
+- Rating 1-5 untuk kepuasan umum
+- Admin approval workflow sebelum published
+- Admin dapat edit, delete, atau moderate testimoni
+
+#### Customer Q&A
+
+- Pelanggan dapat mengajukan pertanyaan tanpa login
+- Admin dapat menjawab pertanyaan
+- Status tracking (open/answered)
+- Public view hanya untuk pertanyaan yang sudah dijawab
+- Full CRUD untuk admin management
 
 ### 🚪 **API Gateway**
 
@@ -152,6 +171,8 @@
   │  • products   │          │  Port 8081       │
   │  • projects   │          └──────────────────┘
   │  • reviews    │
+  │  • testimonials│
+  │  • qas        │
   │  • chats      │
   └───────────────┘
 ```
