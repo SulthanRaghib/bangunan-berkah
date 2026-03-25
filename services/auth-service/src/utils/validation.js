@@ -21,7 +21,9 @@ const registerSchema = Joi.object({
     "string.min": "Password minimal 6 karakter",
     "any.required": "Password wajib diisi",
   }),
-  role: Joi.string().valid("user", "admin").optional(),
+  role: Joi.string().valid("user", "admin").optional().messages({
+    "any.only": "Role harus berupa 'user' atau 'admin'",
+  }),
 });
 
 const loginSchema = Joi.object({
@@ -37,30 +39,29 @@ const loginSchema = Joi.object({
 });
 
 const updateUserSchema = Joi.object({
-  name: Joi.string().min(3).max(100).optional(),
-  email: Joi.string().email().optional(),
-  password: Joi.string().min(6).optional(),
-  role: Joi.string().valid("user", "admin").optional(),
-}).min(1); // At least one field must be provided
+  name: Joi.string().min(3).max(100).optional().messages({
+    "string.min": "Nama minimal 3 karakter",
+    "string.max": "Nama maksimal 100 karakter",
+  }),
+  email: Joi.string().email().optional().messages({
+    "string.email": "Format email tidak valid",
+  }),
+  password: Joi.string().min(6).optional().messages({
+    "string.min": "Password minimal 6 karakter",
+  }),
+  role: Joi.string().valid("user", "admin").optional().messages({
+    "any.only": "Role harus berupa 'user' atau 'admin'",
+  }),
+}).min(1).messages({
+  "object.min": "Minimal satu field harus diperbarui",
+});
 
 // ========================================
-// VALIDATION FUNCTIONS
+// EXPORTS
 // ========================================
-
-const validateRegister = (data) => {
-  return registerSchema.validate(data, { abortEarly: false });
-};
-
-const validateLogin = (data) => {
-  return loginSchema.validate(data, { abortEarly: false });
-};
-
-const validateUpdateUser = (data) => {
-  return updateUserSchema.validate(data, { abortEarly: false });
-};
-
+// Export only schemas - validation logic is handled by shared validate utility
 module.exports = {
-  validateRegister,
-  validateLogin,
-  validateUpdateUser,
+  registerSchema,
+  loginSchema,
+  updateUserSchema,
 };
