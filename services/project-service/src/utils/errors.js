@@ -49,13 +49,13 @@ class ConflictError extends AppError {
 }
 
 class UnauthorizedError extends AppError {
-    constructor(message = "Unauthorized") {
+    constructor(message = "Tidak terautentikasi") {
         super(message, 401);
     }
 }
 
 class ForbiddenError extends AppError {
-    constructor(message = "Forbidden") {
+    constructor(message = "Akses ditolak") {
         super(message, 403);
     }
 }

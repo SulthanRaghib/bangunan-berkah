@@ -3,14 +3,14 @@ const checkRole = (allowedRoles) => {
         if (!req.user) {
             return res.status(401).json({
                 success: false,
-                message: "Unauthorized",
+                message: "Tidak terautentikasi",
             });
         }
 
         if (!allowedRoles.includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
-                message: "Forbidden: Anda tidak memiliki akses",
+                message: "Akses ditolak: Anda tidak memiliki hak akses",
                 requiredRole: allowedRoles,
                 yourRole: req.user.role,
             });

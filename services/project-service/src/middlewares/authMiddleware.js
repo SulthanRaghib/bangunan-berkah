@@ -7,7 +7,7 @@ const authMiddleware = (req, res, next) => {
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return res.status(401).json({
                 success: false,
-                message: "Unauthorized: Token tidak tersedia",
+                message: "Token tidak tersedia",
             });
         }
 
@@ -18,7 +18,7 @@ const authMiddleware = (req, res, next) => {
         next();
     } catch (err) {
         if (err.name === "TokenExpiredError") {
-            return res.status(401).json({ success: false, message: "Token expired" });
+            return res.status(401).json({ success: false, message: "Token kedaluwarsa" });
         }
         return res.status(401).json({ success: false, message: "Token tidak valid" });
     }

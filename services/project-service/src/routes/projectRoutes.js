@@ -160,14 +160,35 @@ router.get("/:projectCode", projectController.getProjectByCode);
  *           schema:
  *             type: object
  *             properties:
- *               name:
+ *               projectName:
+ *                 type: string
+ *               projectType:
+ *                 type: string
+ *                 enum: [konstruksi, furniture]
+ *               customerName:
+ *                 type: string
+ *               customerEmail:
+ *                 type: string
+ *                 format: email
+ *               customerPhone:
+ *                 type: string
+ *               customerAddress:
  *                 type: string
  *               description:
  *                 type: string
- *               location:
+ *               startDate:
  *                 type: string
+ *                 format: date
+ *               estimatedEndDate:
+ *                 type: string
+ *                 format: date
+ *               status:
+ *                 type: string
+ *                 enum: [pending, in_progress, on_hold, completed, cancelled]
  *               budget:
  *                 type: number
+ *               notes:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Project updated successfully

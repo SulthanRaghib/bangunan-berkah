@@ -32,7 +32,7 @@ function createActivity({ userId = "system", userName = "system", action = "unkn
  * @returns {Promise<Object|null>} inserted activity or null if project not found
  */
 async function logProjectActivity(projectCode, activityPayload = {}) {
-    if (!projectCode) throw new Error("projectCode is required to log activity");
+    if (!projectCode) throw new Error("projectCode wajib diisi untuk mencatat aktivitas");
 
     const activity = createActivity(activityPayload);
 
