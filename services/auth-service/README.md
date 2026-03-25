@@ -1,208 +1,167 @@
-# 🔐 Auth Service - PT Solusi Bangunan Berkah
+# 🔐 Auth Service
 
-**Auth Service** adalah fondasi keamanan dari ekosistem microservices PT Solusi Bangunan Berkah. Layanan ini bertindak sebagai _gatekeeper_ yang menangani identitas pengguna, otentikasi, otorisasi berbasis peran (RBAC), dan manajemen data pengguna secara terpusat menggunakan database MongoDB.
+<div align="center">
 
----
+![Node.js](https://img.shields.io/badge/Node.js-20-green?style=for-the-badge&logo=node.js)
+![Express](https://img.shields.io/badge/Express-4.19-white?style=for-the-badge&logo=express)
+![Prisma](https://img.shields.io/badge/Prisma-5.x-blue?style=for-the-badge&logo=prisma)
+![MongoDB](https://img.shields.io/badge/MongoDB-7.x-green?style=for-the-badge&logo=mongodb)
+![JWT](https://img.shields.io/badge/Auth-JWT-orange?style=for-the-badge)
 
-## 📋 Daftar Isi
+</div>
 
-- [Fitur Utama](#-fitur-utama)
-- [Arsitektur & Teknologi](#-arsitektur--teknologi)
-- [Prasyarat Sistem](#-prasyarat-sistem)
-- [Instalasi & Konfigurasi](#-instalasi--konfigurasi)
-- [Struktur Project](#-struktur-project)
-- [Dokumentasi API](#-dokumentasi-api)
-- [Alur Kerja & Keamanan](#-alur-kerja--keamanan)
+Auth Service menangani autentikasi, otorisasi, dan manajemen user untuk seluruh ekosistem microservices.
 
 ---
 
 ## ✨ Fitur Utama
 
-### 🛡️ Otentikasi (Authentication)
-
-- **Registrasi & Login**: Validasi input ketat menggunakan Joi dan keamanan password dengan Bcrypt.
-- **JWT Standard**: Menggunakan strategi _Dual Token_ (Access Token & Refresh Token) untuk keamanan sesi yang lebih baik.
-- **Token Refresh**: Mekanisme pembaruan token akses tanpa perlu login ulang selama refresh token valid.
-
-### 👮 Otorisasi (Authorization)
-
-- **Role-Based Access Control (RBAC)**: Membedakan hak akses antara `admin` dan `user` biasa.
-- **Middleware Protection**: Middleware terintegrasi untuk memverifikasi token dan peran pengguna sebelum mengakses _protected routes_.
-
-### 👤 Manajemen Pengguna
-
-- **CRUD User**: Admin memiliki akses penuh untuk melihat, mengubah, dan menghapus pengguna.
-- **Profile Management**: Pengguna dapat melihat dan memperbarui profil mereka sendiri.
-- **Self-Protection**: Mencegah admin menghapus akunnya sendiri secara tidak sengaja.
-
-### 🩺 Monitoring
-
-- **Health Checks**: Endpoint khusus (`/health`, `/live`, `/ready`) untuk pemantauan status layanan dan koneksi database (Liveness & Readiness probes).
+- Registrasi dan login pengguna.
+- JWT access token + refresh token.
+- Endpoint profile user aktif.
+- Manajemen user (list, detail, update, delete).
+- Role-based access (`admin`, `user`).
+- Health, readiness, dan liveness probe.
+- Swagger UI + auto-fill token script untuk testing cepat.
 
 ---
 
-## 🛠 Arsitektur & Teknologi
+## 🧱 Teknologi
 
-Service ini dibangun di atas teknologi modern yang mengutamakan performa I/O dan keamanan:
-
-| Komponen      | Teknologi                                                      | Deskripsi                                                 |
-| :------------ | :------------------------------------------------------------- | :-------------------------------------------------------- |
-| **Runtime**   | ![NodeJS](https://img.shields.io/badge/Node.js-20.x-green)     | Environment JavaScript server-side yang ringan dan cepat. |
-| **Framework** | ![Express](https://img.shields.io/badge/Express.js-4.19-white) | Framework web minimalis untuk routing API yang efisien.   |
-| **Database**  | ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green)     | NoSQL Database untuk fleksibilitas skema data user.       |
-| **ORM**       | ![Prisma](https://img.shields.io/badge/Prisma-5.22-blue)       | Modern ORM untuk interaksi type-safe dengan MongoDB.      |
-| **Keamanan**  | ![JWT](https://img.shields.io/badge/JWT-Auth-orange)           | Standar industri untuk transmisi klaim keamanan.          |
-| **Validasi**  | Joi                                                            | Schema validator untuk memastikan integritas data input.  |
+- Node.js + Express
+- Prisma Client (`provider = mongodb`)
+- MongoDB
+- Joi (input validation)
+- bcryptjs (password hashing)
+- jsonwebtoken (token)
+- Swagger (swagger-jsdoc + swagger-ui-express)
 
 ---
 
-## 📝 Prasyarat Sistem
+## 📂 Struktur Folder
 
-Sebelum memulai, pastikan lingkungan pengembangan Anda memenuhi syarat berikut:
-
-1.  **Node.js**: Versi 20.0 atau lebih baru.
-2.  **MongoDB**: Instance database MongoDB yang berjalan (lokal atau cloud).
-3.  **Docker** (Opsional): Untuk deployment menggunakan container.
+```bash
+auth-service/
+├── prisma/
+│   ├── schema.prisma
+│   ├── seed.js
+│   └── seeders/
+├── src/
+│   ├── app.js
+│   ├── config/
+│   ├── controllers/
+│   ├── middlewares/
+│   ├── routes/
+│   └── utils/
+├── docker-entrypoint.sh
+├── Dockerfile
+├── package.json
+└── server.js
+```
 
 ---
 
-## 🚀 Instalasi & Konfigurasi
+## ⚙️ Environment Variables
 
-### 1. Setup Environment Variables
-
-Salin file `.env.example` menjadi `.env` di dalam direktori `services/auth-service`:
+Salin file contoh:
 
 ```bash
 cp .env.example .env
 ```
 
-Sesuaikan konfigurasi berikut (pastikan `DATABASE_URL` mengarah ke MongoDB):
+Minimum konfigurasi:
 
 ```env
 PORT=8001
 SERVICE_NAME=auth-service
-DATABASE_URL="mongodb://admin:password@localhost:27017/auth_db?authSource=admin"
+DATABASE_URL=mongodb://admin:password@mongodb:27017/auth_db?authSource=admin
 
-# JWT Secrets (Gunakan string acak yang panjang dan aman)
-JWT_SECRET=supersecretkey
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=supersecretrefreshkey
-JWT_REFRESH_EXPIRES_IN=7d
+JWT_SECRET=replace_with_strong_secret
+JWT_EXPIRES_IN=7d
+JWT_REFRESH_SECRET=replace_with_strong_refresh_secret
+JWT_REFRESH_EXPIRES_IN=30d
+
+NODE_ENV=development
 ```
 
-### 2\. Instalasi Dependensi
+> `JWT_SECRET` harus sama di service lain yang melakukan verifikasi token.
 
-Jalankan perintah berikut untuk menginstal paket yang dibutuhkan:
+---
+
+## 🚀 Menjalankan Service
 
 ```bash
 npm install
+npm run prisma:generate
+npm run prisma:seed   # opsional
+npm run dev
 ```
 
-### 3\. Database Setup & Seeding
-
-Generate Prisma Client dan isi database dengan data awal (Seeding):
+Mode production:
 
 ```bash
-# Generate client
-npx prisma generate
-
-# Push schema ke MongoDB (tanpa migrasi SQL)
-npx prisma db push
-
-# Jalankan seeder (Membuat Admin & User default)
-npm run seed
-```
-
-> **Info Seeder:** Script ini akan membuat user default:
->
-> - **Admin**: `admin@solusi-bangunan.com` / `password123`
-> - **User**: `user@solusi-bangunan.com` / `password123`
-
-### 4\. Menjalankan Service
-
-- **Mode Development** (dengan Hot-reload):
-  ```bash
-  npm run dev
-  ```
-- **Mode Production**:
-  ```bash
-  npm start
-  ```
-
----
-
-## 📂 Struktur Project
-
-Struktur kode diorganisir dengan pola _Separation of Concerns_ untuk kemudahan pemeliharaan:
-
-```
-auth-service/
-├── prisma/
-│   ├── schema.prisma       # Definisi Model Database (User)
-│   ├── seed.js             # Entry point seeding
-│   └── seeders/            # Logika dummy data user
-├── src/
-│   ├── config/             # Konfigurasi Prisma Client
-│   ├── controllers/        # Logika bisnis (Auth & User Management)
-│   ├── middlewares/        # Auth check, Role check, Error handling
-│   ├── routes/             # Definisi Endpoint API
-│   ├── utils/              # Helper: Bcrypt, JWT Generator, Validation
-│   └── app.js              # Inisialisasi Express App
-├── Dockerfile              # Konfigurasi Docker Image
-├── docker-entrypoint.sh    # Script startup container
-└── server.js               # Entry point server
+npm run start:prod
 ```
 
 ---
 
-## 📡 Dokumentasi API
+## 📡 Endpoint Utama
 
-Berikut adalah endpoint utama yang tersedia.
-_(🔒 = Memerlukan Token JWT di Header Authorization)_
+Base URL: `http://localhost:8001`
 
-### 🔑 Autentikasi (Public)
+### Auth
 
-| Method | Endpoint                  | Deskripsi                              | Body Request                       |
-| :----- | :------------------------ | :------------------------------------- | :--------------------------------- |
-| `POST` | `/api/auth/register`      | Mendaftarkan pengguna baru.            | `{ name, email, password, role? }` |
-| `POST` | `/api/auth/login`         | Masuk ke sistem & dapatkan token.      | `{ email, password }`              |
-| `POST` | `/api/auth/refresh-token` | Perbarui Access Token yang kadaluarsa. | `{ refreshToken }`                 |
-| `POST` | `/api/auth/logout`        | Logout (Client-side clear).            | -                                  |
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh-token`
+- `POST /api/auth/logout` (butuh token)
+- `GET /api/auth/profile` (butuh token)
 
-### 👤 Profil Pengguna
+### User Management
 
-| Method | Endpoint            | Deskripsi                                     | Akses  |
-| :----- | :------------------ | :-------------------------------------------- | :----- |
-| `GET`  | `/api/auth/profile` | Mendapatkan data diri user yang sedang login. | 🔒 All |
+- `GET /api/users` (admin)
+- `GET /api/users/:id` (owner/admin)
+- `PUT /api/users/:id` (owner/admin)
+- `DELETE /api/users/:id` (admin)
 
-### 👥 Manajemen User (Admin Area)
+### Health
 
-| Method   | Endpoint         | Deskripsi                                            | Akses          |
-| :------- | :--------------- | :--------------------------------------------------- | :------------- |
-| `GET`    | `/api/users`     | Melihat daftar semua pengguna (pagination & search). | 🔒 Admin       |
-| `GET`    | `/api/users/:id` | Melihat detail pengguna berdasarkan ID.              | 🔒 All         |
-| `PUT`    | `/api/users/:id` | Update data pengguna (Nama, Email, Password).        | 🔒 Owner/Admin |
-| `DELETE` | `/api/users/:id` | Menghapus pengguna dari sistem.                      | 🔒 Admin       |
+- `GET /health`
+- `GET /ready`
+- `GET /live`
 
 ---
 
-## 💡 Alur Kerja & Keamanan
+## 📘 Dokumentasi API
 
-### 1\. Password Hashing
-
-Password tidak pernah disimpan dalam bentuk teks asli (plain text). Layanan menggunakan **Bcrypt** dengan _salt round_ standar untuk melakukan _hashing_ sebelum data disimpan ke MongoDB.
-
-### 2\. Strategi JWT (JSON Web Token)
-
-- **Access Token**: Berumur pendek (misal: 15 menit). Digunakan untuk mengakses resource API. Disimpan di Memory/State frontend.
-- **Refresh Token**: Berumur panjang (misal: 7 hari). Digunakan hanya untuk meminta Access Token baru ketika yang lama kadaluarsa. Disimpan di HTTPOnly Cookie atau Secure Storage.
-
-### 3\. Validasi Input
-
-Setiap request yang masuk divalidasi menggunakan **Joi Schema**. Ini mencegah data kotor masuk ke controller dan memberikan pesan error yang bersahabat jika format data salah (misal: format email tidak valid, password terlalu pendek).
-
-### 4\. Containerization
-
-Dilengkapi dengan `Dockerfile` dan `docker-entrypoint.sh` yang cerdas. Script entrypoint akan otomatis menunggu database siap (`db push`) dan menjalankan migrasi/seeding jika diperlukan sebelum aplikasi dimulai, memastikan deployment yang mulus di lingkungan orkestrasi.
+- Swagger UI: `http://localhost:8001/api-docs`
+- Swagger JSON: `http://localhost:8001/api/auth/api-docs.json`
 
 ---
+
+## 🧪 Contoh Request
+
+### Login
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "password123"
+}
+```
+
+### Ambil Profile
+
+```http
+GET /api/auth/profile
+Authorization: Bearer <access_token>
+```
+
+---
+
+<div align="center">
+  <sub>© 2026 Sulthan Raghib Fillah</sub>
+</div>

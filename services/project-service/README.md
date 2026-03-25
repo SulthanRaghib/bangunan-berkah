@@ -1,240 +1,197 @@
-# 🏗️ Project Service - PT Solusi Bangunan Berkah
+# 🏗️ Project Service
 
-**Project Service** adalah microservice yang bertanggung jawab untuk manajemen siklus hidup proyek konstruksi dan furniture. Layanan ini memungkinkan admin untuk mengelola proyek, memantau _milestone_ (tahapan pengerjaan), mengunggah dokumentasi foto/dokumen, serta menyediakan fitur pelacakan (_tracking_) publik bagi pelanggan.
+<div align="center">
 
----
+![Node.js](https://img.shields.io/badge/Node.js-20-green?style=for-the-badge&logo=node.js)
+![Express](https://img.shields.io/badge/Express-4.18-white?style=for-the-badge&logo=express)
+![Prisma](https://img.shields.io/badge/Prisma-5.x-blue?style=for-the-badge&logo=prisma)
+![MongoDB](https://img.shields.io/badge/MongoDB-7.x-green?style=for-the-badge&logo=mongodb)
+![Swagger](https://img.shields.io/badge/API-Swagger-brightgreen?style=for-the-badge)
 
-## 📋 Daftar Isi
+</div>
 
-- [Fitur Utama](#-fitur-utama)
-- [Arsitektur & Teknologi](#-arsitektur--teknologi)
-- [Prasyarat Sistem](#-prasyarat-sistem)
-- [Instalasi & Menjalankan](#-instalasi--menjalankan)
-- [Konfigurasi Environment](#-konfigurasi-environment)
-- [Struktur Folder](#-struktur-folder)
-- [Dokumentasi API](#-dokumentasi-api)
-- [Alur Kerja & Logika](#-alur-kerja--logika)
+Project Service adalah service inti untuk lifecycle proyek: project CRUD, milestone, progress report, dokumen, dashboard, dan public tracking.
 
 ---
 
 ## ✨ Fitur Utama
 
-### 🏢 Manajemen Proyek
-
-- **CRUD Proyek**: Membuat, membaca, memperbarui, dan menghapus data proyek.
-- **Project Code Generator**: Pembuatan kode proyek unik otomatis (Format: `PRJ-YYYY-XXX`) untuk identifikasi mudah.
-- **Status Management**: Mengelola status proyek (`pending`, `in_progress`, `on_hold`, `completed`, `cancelled`).
-
-### 📈 Milestone & Progress Tracking
-
-- **Manajemen Tahapan**: Membagi proyek menjadi beberapa _milestone_ (misal: Pondasi, Struktur, Finishing).
-- **Progress Calculation**: Perhitungan persentase progress proyek secara otomatis berdasarkan bobot milestone yang selesai.
-- **Timeline**: Estimasi durasi, tanggal mulai, dan tanggal selesai.
-
-### 📂 Dokumentasi Digital
-
-- **Upload Foto**: Mengunggah foto progres pengerjaan ke dalam milestone spesifik.
-- **Manajemen Dokumen**: Menyimpan dokumen kontrak, blueprint, atau perizinan terkait proyek.
-- **File Handling**: Validasi tipe file dan manajemen penyimpanan lokal.
-
-### 🔍 Public Tracking (Fitur Unggulan)
-
-- **Customer Access**: Endpoint publik yang memungkinkan pelanggan memantau progres proyek mereka hanya dengan menggunakan `projectCode`.
-- **Real-time Updates**: Pelanggan dapat melihat status terkini, sisa hari pengerjaan, dan foto progres terbaru.
-
-### 📊 Dashboard & Activity Log
-
-- **Activity Logging**: Mencatat setiap aktivitas (pembuatan, update status, upload) untuk audit trail.
-- **Statistik**: Ringkasan jumlah proyek aktif, selesai, dan pendapatan untuk dashboard admin.
+- CRUD proyek dengan kode unik `PRJ-YYYY-XXX`.
+- Milestone management (add/update/delete/list).
+- Weekly progress report dengan upload foto.
+- Public tracking (`/track/:projectCode`, `/summary/:projectCode`).
+- Dokumen proyek (upload/list/delete).
+- Dashboard statistik dan activity log.
 
 ---
 
-## 🛠 Arsitektur & Teknologi
+## 🧠 Logika Progress Saat Ini
 
-Service ini dibangun menggunakan teknologi modern yang berfokus pada performa dan skalabilitas:
+Sistem saat ini memiliki dua sumber update `project.progress`:
 
-| Komponen        | Teknologi                                                      | Keterangan                                                                |
-| :-------------- | :------------------------------------------------------------- | :------------------------------------------------------------------------ |
-| **Runtime**     | ![NodeJS](https://img.shields.io/badge/Node.js-20.x-green)     | Environment eksekusi JavaScript server-side.                              |
-| **Framework**   | ![Express](https://img.shields.io/badge/Express.js-4.18-white) | Web framework minimalis untuk routing API.                                |
-| **Database**    | ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green)     | NoSQL Database untuk fleksibilitas schema (dokumen & milestone embedded). |
-| **ORM**         | ![Prisma](https://img.shields.io/badge/Prisma-5.19-blue)       | Type-safe database client & modeling.                                     |
-| **Auth**        | JWT (JSON Web Token)                                           | Validasi token untuk endpoint yang dilindungi (Admin).                    |
-| **File Upload** | Multer                                                         | Middleware untuk menangani `multipart/form-data`.                         |
+1. **Milestone Flow**
+   - Endpoint: create/update/delete milestone.
+   - Progress dihitung sebagai rata-rata progress milestone.
 
----
+2. **Weekly Report Flow**
+   - Endpoint: `POST /api/projects/:projectCode/progress`.
+   - Progress di-set langsung dari nilai report.
 
-## 📝 Prasyarat Sistem
-
-Sebelum menjalankan service ini, pastikan sistem Anda memiliki:
-
-1.  **Node.js** (v20.x atau lebih baru)
-2.  **MongoDB** (Local atau Atlas Cluster)
-3.  **Docker & Docker Compose** (Opsional, untuk deployment container)
+Gunakan satu sumber sebagai _single source of truth_ jika ingin konsistensi yang ketat.
 
 ---
 
-## 🚀 Instalasi & Menjalankan
+## 🧱 Teknologi
 
-### Metode 1: Menjalankan Secara Lokal (Development)
+- Node.js + Express
+- Prisma Client (`provider = mongodb`)
+- MongoDB
+- Multer (document/photos upload)
+- Joi + JWT middleware
+- Swagger UI + auto token fill script
 
-1.  **Masuk ke direktori service:**
+---
 
-    ```bash
-    cd services/project-service
-    ```
-
-2.  **Install dependensi:**
-
-    ```bash
-    npm install
-    ```
-
-3.  **Setup Environment:**
-    Salin file `.env.example` menjadi `.env` dan sesuaikan `DATABASE_URL` dengan koneksi MongoDB Anda.
-
-    ```bash
-    cp .env.example .env
-    ```
-
-4.  **Generate Prisma Client:**
-
-    ```bash
-    npx prisma generate
-    ```
-
-5.  **Jalankan Seeder (Opsional):**
-    Untuk mengisi database dengan data dummy proyek.
-
-    ```bash
-    npm run seed
-    ```
-
-6.  **Jalankan Service:**
-    ```bash
-    npm run dev
-    ```
-    Service akan berjalan di `http://localhost:8004`.
-
-### Metode 2: Menggunakan Docker
-
-Dari root direktori proyek utama (tempat `docker-compose.yml` berada):
+## 📂 Struktur Folder
 
 ```bash
-docker-compose up -d --build project-service
-```
-
----
-
-## ⚙️ Konfigurasi & Environment
-
-Pastikan file `.env` Anda memiliki konfigurasi berikut:
-
-```env
-# Server Configuration
-PORT=8004
-NODE_ENV=development
-SERVICE_NAME=project-service
-
-# Database (MongoDB Connection String)
-# Contoh format: mongodb://username:password@host:port/database_name?authSource=admin
-DATABASE_URL="mongodb://root:password@localhost:27017/project_db?authSource=admin"
-
-# Security (Harus sama dengan Auth Service)
-JWT_SECRET=supersecretjwtkey
-```
-
----
-
-## 📁 Struktur Folder
-
-Struktur proyek disusun secara modular untuk memudahkan _maintenance_:
-
-```
 project-service/
 ├── prisma/
-│   ├── schema.prisma        # Definisi Model Database (MongoDB)
-│   ├── seed.js              # Entry point seeding
-│   └── seeders/             # Data dummy logic
+│   ├── schema.prisma
+│   ├── seed.js
+│   └── seeders/
 ├── src/
-│   ├── config/              # Konfigurasi DB & Prisma
-│   ├── controllers/         # Logika bisnis (Project, Milestone, Photo, dll)
-│   ├── middlewares/         # Auth, Role Check, Upload Handler
-│   ├── routes/              # Definisi Endpoint API
-│   ├── services/            # Shared services (Activity Logger)
-│   └── utils/               # Helper functions (Format tanggal, Validasi)
-├── uploads/                 # Direktori penyimpanan file (Local)
-├── Dockerfile               # Konfigurasi Image Docker
-├── server.js                # Entry point aplikasi
-└── package.json
+│   ├── app.js
+│   ├── config/
+│   ├── controllers/
+│   ├── middlewares/
+│   ├── routes/
+│   ├── services/
+│   └── utils/
+├── uploads/
+│   ├── contracts/
+│   ├── documents/
+│   └── photos/
+├── docker-entrypoint.sh
+├── Dockerfile
+├── package.json
+└── server.js
 ```
 
 ---
 
-## 📡 Dokumentasi API
+## ⚙️ Environment Variables
 
-Berikut adalah endpoint utama yang tersedia.
-_(🔒 = Memerlukan Token JWT & Role Admin)_
+```bash
+cp .env.example .env
+```
 
-### 🏗️ Projects
+Minimum konfigurasi:
 
-| Method  | Endpoint                     | Deskripsi                                        | Akses    |
-| :------ | :--------------------------- | :----------------------------------------------- | :------- |
-| `GET`   | `/api/projects`              | Ambil semua proyek (filter, search, pagination). | 🔒 Admin |
-| `GET`   | `/api/projects/:code`        | Ambil detail proyek berdasarkan kode.            | 🔒 Admin |
-| `POST`  | `/api/projects`              | Buat proyek baru.                                | 🔒 Admin |
-| `PUT`   | `/api/projects/:code`        | Update data proyek.                              | 🔒 Admin |
-| `PATCH` | `/api/projects/:code/status` | Update status proyek saja.                       | 🔒 Admin |
+```env
+PORT=8004
+SERVICE_NAME=project-service
+NODE_ENV=development
 
-### ⛳ Milestones (Tahapan)
-
-| Method  | Endpoint                             | Deskripsi                           | Akses    |
-| :------ | :----------------------------------- | :---------------------------------- | :------- |
-| `GET`   | `/api/:code/milestones`              | List semua milestone proyek.        | 🔒 Admin |
-| `POST`  | `/api/:code/milestones`              | Tambah milestone baru.              | 🔒 Admin |
-| `PATCH` | `/api/:code/milestones/:id/progress` | Update progress & status milestone. | 🔒 Admin |
-
-### 📷 Photos & Documents
-
-| Method   | Endpoint                           | Deskripsi                        | Akses    |
-| :------- | :--------------------------------- | :------------------------------- | :------- |
-| `POST`   | `/api/:code/milestones/:id/photos` | Upload foto ke milestone.        | 🔒 Admin |
-| `POST`   | `/api/:code/documents`             | Upload dokumen proyek (PDF/Doc). | 🔒 Admin |
-| `DELETE` | `/api/:code/documents/:id`         | Hapus dokumen.                   | 🔒 Admin |
-
-### 🔍 Public Tracking (Customer)
-
-| Method | Endpoint                      | Deskripsi                                | Akses     |
-| :----- | :---------------------------- | :--------------------------------------- | :-------- |
-| `GET`  | `/api/projects/track/:code`   | Melacak detail, progress, & foto proyek. | 🌍 Public |
-| `GET`  | `/api/projects/summary/:code` | Ringkasan singkat status proyek.         | 🌍 Public |
-
-### 📊 Dashboard
-
-| Method | Endpoint                          | Deskripsi                               | Akses    |
-| :----- | :-------------------------------- | :-------------------------------------- | :------- |
-| `GET`  | `/api/dashboard/stats`            | Statistik total proyek, status, & tipe. | 🔒 Admin |
-| `GET`  | `/api/dashboard/activities/:code` | Log aktivitas/history proyek.           | 🔒 Admin |
+DATABASE_URL=mongodb://admin:password@mongodb:27017/project_db?authSource=admin
+JWT_SECRET=replace_with_same_secret_as_auth
+```
 
 ---
 
-## 💡 Alur Kerja & Logika
+## 🚀 Menjalankan Service
 
-### 1\. Perhitungan Progress Otomatis
+```bash
+npm install
+npm run prisma:generate
+npm run prisma:seed   # opsional
+npm run dev
+```
 
-Progress proyek dihitung berdasarkan rata-rata progress dari semua milestone yang ada.
-_Logic:_ Jika Milestone A (100%) dan Milestone B (50%), maka Progress Proyek = (100+50)/2 = 75%. Logika ini dijalankan setiap kali milestone diupdate.
+Mode production:
 
-### 2\. Penyimpanan File
-
-File yang diupload (foto/dokumen) disimpan secara lokal di folder `uploads/photos` atau `uploads/documents`. Nama file digenerate secara unik (`timestamp-random`) untuk menghindari duplikasi nama.
-
-### 3\. Activity Logger
-
-Setiap tindakan krusial (Create Project, Update Status, Upload Foto) akan memicu fungsi `logProjectActivity` yang menyimpan riwayat ke dalam array `activities` di dalam dokumen Proyek di MongoDB. Ini memudahkan tracking "siapa melakukan apa dan kapan".
-
-### 4\. Database MongoDB
-
-Berbeda dengan service lain yang mungkin menggunakan SQL, service ini menggunakan **MongoDB** karena struktur data proyek yang bersifat _nested_ (Proyek memiliki banyak Milestone, Milestone memiliki banyak Foto) lebih efisien disimpan sebagai dokumen JSON yang tertanam (_embedded documents_).
+```bash
+npm run start:prod
+```
 
 ---
+
+## 📡 Endpoint Utama
+
+Base URL: `http://localhost:8004`
+
+### Public Tracking
+
+- `GET /api/projects/track/:projectCode`
+- `GET /api/projects/summary/:projectCode`
+
+### Projects (admin)
+
+- `POST /api/projects`
+- `GET /api/projects`
+- `GET /api/projects/:projectCode`
+- `PUT /api/projects/:projectCode`
+- `DELETE /api/projects/:projectCode`
+- `PATCH /api/projects/:projectCode/status`
+- `POST /api/projects/:projectCode/progress`
+
+### Milestones (admin)
+
+- `POST /api/projects/:projectCode/milestones`
+- `GET /api/projects/:projectCode/milestones`
+- `PATCH /api/projects/:projectCode/milestones/:milestoneId`
+- `DELETE /api/projects/:projectCode/milestones/:milestoneId`
+
+### Documents (admin)
+
+- `POST /api/:projectCode/documents`
+- `GET /api/:projectCode/documents`
+- `DELETE /api/:projectCode/documents/:documentId`
+
+### Dashboard (admin)
+
+- `GET /api/dashboard/stats`
+- `GET /api/dashboard/activities/:projectCode`
+
+### Health
+
+- `GET /api/health/health`
+- `GET /api/health/ready`
+- `GET /api/health/live`
+
+---
+
+## 📘 Dokumentasi API
+
+- Swagger UI: `http://localhost:8004/api-docs`
+- Swagger JSON: `http://localhost:8004/api/projects/api-docs.json`
+
+---
+
+## 🧪 Contoh Request
+
+### Public Tracking
+
+```http
+GET /api/projects/track/PRJ-2026-001
+```
+
+### Tambah Milestone (admin)
+
+```http
+POST /api/projects/PRJ-2026-001/milestones
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "Pondasi",
+  "targetDate": "2026-05-15",
+  "progress": 0
+}
+```
+
+---
+
+<div align="center">
+  <sub>© 2026 Sulthan Raghib Fillah</sub>
+</div>
