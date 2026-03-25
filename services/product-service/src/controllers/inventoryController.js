@@ -195,33 +195,31 @@ exports.updateStock = async (req, res) => {
       }
     }
 
-    // Update with transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Update inventory
-      const updated = await tx.inventory.update({
-        where: { productId: parseInt(productId) },
-        data: {
-          stock: newStock,
-          lastRestockDate:
-            type === "in" ? new Date() : inventory.lastRestockDate,
-          lastRestockQty:
-            type === "in" ? parseInt(quantity) : inventory.lastRestockQty,
-        },
-      });
+    // Update inventory using Prisma methods (separate operations instead of transaction)
+    // Note: If you need true atomicity, configure MongoDB replica set
 
-      // Create stock history
-      await tx.stockHistory.create({
-        data: {
-          productId: parseInt(productId),
-          type,
-          quantity: parseInt(quantity),
-          description,
-          createdBy: req.user.id,
-        },
-      });
-
-      return updated;
+    // 1. Update inventory
+    const updated = await prisma.inventory.update({
+      where: { productId: productId },
+      data: {
+        stock: newStock,
+        lastRestockDate: type === "in" ? new Date() : inventory.lastRestockDate,
+        lastRestockQty: type === "in" ? parseInt(quantity) : inventory.lastRestockQty,
+      },
     });
+
+    // 2. Create stock history
+    await prisma.stockHistory.create({
+      data: {
+        productId: productId,
+        type,
+        quantity: parseInt(quantity),
+        description,
+        createdBy: req.user.id,
+      },
+    });
+
+    const result = updated;
 
     res.status(200).json({
       success: true,

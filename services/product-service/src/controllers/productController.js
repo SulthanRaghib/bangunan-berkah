@@ -63,55 +63,51 @@ exports.createProduct = async (req, res) => {
     // Handle image uploads
     const images = req.files ? req.files.map((file) => file.filename) : [];
 
-    // Create product with transaction
-    const product = await prisma.$transaction(async (tx) => {
-      // Create product
-      const newProduct = await tx.product.create({
+    // Use Prisma's create method instead of transaction (simplified approach)
+    // Note: If you need true atomicity, configure MongoDB replica set
+    const product = await prisma.product.create({
+      data: {
+        name,
+        slug,
+        description,
+        sku,
+        price: parseFloat(price),
+        salePrice: salePrice ? parseFloat(salePrice) : null,
+        categoryId: categoryId,
+        unit: unit || "pcs",
+        weight: weight ? parseFloat(weight) : null,
+        dimensions,
+        images: images.length > 0 ? images : undefined,
+        tags,
+        isFeatured: isFeatured === "true" || isFeatured === true,
+        createdBy: req.user.id,
+      },
+      include: {
+        category: true,
+      },
+    });
+
+    // Create inventory separately
+    await prisma.inventory.create({
+      data: {
+        productId: product.id,
+        stock: stock ? parseInt(stock) : 0,
+        minStock: minStock ? parseInt(minStock) : 10,
+      },
+    });
+
+    // Create stock history if stock > 0
+    if (stock && parseInt(stock) > 0) {
+      await prisma.stockHistory.create({
         data: {
-          name,
-          slug,
-          description,
-          sku,
-          price: parseFloat(price),
-          salePrice: salePrice ? parseFloat(salePrice) : null,
-          categoryId: parseInt(categoryId),
-          unit: unit || "pcs",
-          weight: weight ? parseFloat(weight) : null,
-          dimensions,
-          images,
-          tags,
-          isFeatured: isFeatured === "true" || isFeatured === true,
+          productId: product.id,
+          type: "in",
+          quantity: parseInt(stock),
+          description: "Initial stock",
           createdBy: req.user.id,
         },
-        include: {
-          category: true,
-        },
       });
-
-      // Create inventory
-      await tx.inventory.create({
-        data: {
-          productId: newProduct.id,
-          stock: stock ? parseInt(stock) : 0,
-          minStock: minStock ? parseInt(minStock) : 10,
-        },
-      });
-
-      // Create stock history
-      if (stock && parseInt(stock) > 0) {
-        await tx.stockHistory.create({
-          data: {
-            productId: newProduct.id,
-            type: "in",
-            quantity: parseInt(stock),
-            description: "Initial stock",
-            createdBy: req.user.id,
-          },
-        });
-      }
-
-      return newProduct;
-    });
+    }
 
     res.status(201).json({
       success: true,
@@ -484,9 +480,8 @@ exports.toggleFeatured = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Produk ${
-        updated.isFeatured ? "ditandai" : "dihapus"
-      } sebagai featured`,
+      message: `Produk ${updated.isFeatured ? "ditandai" : "dihapus"
+        } sebagai featured`,
       data: updated,
     });
   } catch (err) {
