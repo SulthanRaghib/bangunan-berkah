@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install OpenSSL untuk Prisma
 RUN apt-get update -y && \
-    apt-get install -y openssl ca-certificates && \
+    apt-get install -y openssl ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy package files
