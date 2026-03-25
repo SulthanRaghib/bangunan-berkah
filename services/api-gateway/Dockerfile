@@ -6,7 +6,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+# Use npm install (not npm ci) to avoid strict lockfile sync requirement
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Copy aplikasi
 COPY . .
