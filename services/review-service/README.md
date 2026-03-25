@@ -11,7 +11,7 @@
 
 Review Service menangani tiga fitur utama:
 
-1. **Project Reviews** - Review proyek oleh user terautentikasi dengan verifikasi status proyek
+1. **Project Reviews** - Review rating dari pelanggan berdasarkan project code (tanpa login)
 2. **Testimonials** - Testimoni umum dari pelanggan (tanpa login yang diperlukan)
 3. **Customer Q&A** - Pertanyaan dan jawaban dari pelanggan
 
@@ -19,12 +19,14 @@ Review Service menangani tiga fitur utama:
 
 ## ✨ Fitur Utama
 
-### 1. Project Reviews
+### 1. Project Reviews (Public - No Login Required)
 
-- Create review untuk project tertentu (auth required)
-- 1 review per `projectCode`
+- Customer submit review dengan project code
+- Input: Project Code, Nama Customer, Email, Rating (1-5), Comment, Photos
+- 1 review per `projectCode` (unique constraint)
 - Verifikasi project harus `completed` via API internal project-service
 - Public endpoint untuk membaca review berdasarkan `projectCode`
+- **TIDAK memerlukan login/authentication**
 
 ### 2. Testimonials (Non-Project)
 
@@ -37,7 +39,7 @@ Review Service menangani tiga fitur utama:
 ### 3. Customer Q&A
 
 - Pelanggan dapat mengajukan pertanyaan tanpa login
-- Admin dapat menjawab pertanyaan
+- Admin dapat menjawab pertanyaan via admin endpoints
 - Hanya pertanyaan yang telah dijawab ditampilkan ke publik
 - Admin dapat menghapus atau menutup pertanyaan
 
@@ -121,15 +123,15 @@ npm start
 
 Base URL: `http://localhost:8005`
 
-### Project Reviews
+### Project Reviews (Public - No Auth Required)
 
-- `POST /api/reviews` (JWT required) - Create review
-- `GET /api/reviews/:projectCode` (public) - Get reviews for project
+- `POST /api/reviews` (public) - Submit project review
+- `GET /api/reviews/:projectCode` (public) - Get review for project
 
 ### Testimonials
 
 - `POST /api/testimonials` (public) - Submit testimonial
-- `GET /api/testimonials` (public) - List approved testimonials
+- `GET /api/testimonials` (public) - List approved testimonials (paginated)
 - `GET /api/testimonials/admin/all` (admin) - List all testimonials
 - `GET /api/testimonials/admin/:id` (admin) - Get single testimonial
 - `PUT /api/testimonials/admin/:id` (admin) - Update testimonial
@@ -139,7 +141,7 @@ Base URL: `http://localhost:8005`
 ### Customer Q&A
 
 - `POST /api/qa` (public) - Submit question
-- `GET /api/qa` (public) - List answered questions
+- `GET /api/qa` (public) - List answered questions (paginated)
 - `GET /api/qa/admin/all` (admin) - List all questions
 - `GET /api/qa/admin/:id` (admin) - Get single question
 - `PATCH /api/qa/admin/:id/answer` (admin) - Answer question
@@ -160,17 +162,19 @@ Base URL: `http://localhost:8005`
 
 ## 🧪 Contoh Request
 
-### Project Review - Create
+### Project Review - Submit
 
 ```http
 POST /api/reviews
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
   "projectCode": "PRJ-2026-001",
+  "customerName": "Budi Santoso",
+  "customerEmail": "budi@example.com",
   "rating": 5,
-  "comment": "Hasil proyek sangat memuaskan"
+  "comment": "Tim profesional, hasil memuaskan, tepat waktu!",
+  "photos": []
 }
 ```
 
@@ -266,14 +270,14 @@ Admin dapat:
 
 ```prisma
 model Review {
-  id          String
-  projectCode String (unique)
-  userId      String
-  userName    String
-  rating      Int (1-5)
-  comment     String?
-  photos      String[]
-  createdAt   DateTime
+  id            String
+  projectCode   String (unique)
+  customerName  String
+  customerEmail String
+  rating        Int (1-5)
+  comment       String?
+  photos        String[]
+  createdAt     DateTime
 }
 ```
 

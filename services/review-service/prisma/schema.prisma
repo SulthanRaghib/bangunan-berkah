@@ -9,14 +9,14 @@ datasource db {
 }
 
 model Review {
-    id          String   @id @default(auto()) @map("_id") @db.ObjectId
-    projectCode String   @unique
-    userId      String
-    userName    String
-    rating      Int
-    comment     String?
-    photos      String[]
-    createdAt   DateTime @default(now())
+    id            String   @id @default(auto()) @map("_id") @db.ObjectId
+    projectCode   String   @unique
+    customerName  String
+    customerEmail String
+    rating        Int
+    comment       String?
+    photos        String[]
+    createdAt     DateTime @default(now())
 
     @@map("reviews")
 }
