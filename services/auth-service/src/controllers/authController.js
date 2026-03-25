@@ -1,299 +1,116 @@
-const prisma = require("../config/prisma");
-const { ObjectId } = require("mongodb");
-const { hashPassword, comparePassword } = require("../utils/bcrypt");
-const { generateToken, generateRefreshToken } = require("../utils/jwt");
-const { validateRegister, validateLogin } = require("../utils/validation");
+/**
+ * ============================================
+ * AUTH CONTROLLER
+ * ============================================
+ * HTTP request handler untuk Authentication
+ * 
+ * Responsibility:
+ * - Handle HTTP request/response
+ * - Validate input using shared validation
+ * - Call AuthService untuk business logic
+ * - Return standardized responses
+ * 
+ * Uses:
+ * - AuthService untuk business logic
+ * - Shared validation utilities & response builders
+ */
 
-// ========================================
-// REGISTER
-// ========================================
-exports.register = async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
+const authService = require("../services/authService");
+const { registerSchema, loginSchema } = require("../utils/validation");
+const { asyncHandler, validate, sendSuccess, sendBadRequest } = require("../../../shared");
 
-    // Validasi input
-    const { error } = validateRegister(req.body);
-    if (error) {
-      return res.status(400).json({
-        message: error.details[0].message,
-      });
-    }
+/**
+ * Register user
+ * @route POST /api/auth/register
+ * @param {string} name - User name
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @param {string} role - User role (optional, default: user)
+ * @returns {Object} { success, message, user, token, refreshToken }
+ */
+exports.register = asyncHandler(async (req, res) => {
+  // Validasi input dengan shared validate
+  const value = await validate(registerSchema, req.body);
 
-    // Cek email sudah terdaftar
-    const existingUserResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { email },
-      limit: 1
-    });
+  // Call service
+  const result = await authService.register(value);
 
-    if (existingUserResult.cursor.firstBatch.length > 0) {
-      return res.status(400).json({ message: "Email sudah terdaftar" });
-    }
+  // Response
+  return sendSuccess(res, {
+    user: result.user,
+    token: result.token,
+    refreshToken: result.refreshToken,
+  }, "Registrasi berhasil", 201);
+});
 
-    // Hash password
-    const hashedPassword = await hashPassword(password);
+/**
+ * Login user
+ * @route POST /api/auth/login
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Object} { success, message, user, token, refreshToken }
+ */
+exports.login = asyncHandler(async (req, res) => {
+  // Validasi input dengan shared validate
+  const value = await validate(loginSchema, req.body);
 
-    // Create user
-    const newUser = await prisma.$runCommandRaw({
-      insert: "users",
-      documents: [{
-        name,
-        email,
-        password: hashedPassword,
-        role: role || "user",
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }]
-    });
+  // Call service
+  const result = await authService.login(value);
 
-    // Get the inserted user ID
-    const insertedId = newUser.insertedId || newUser.insertedIds?.[0];
+  // Response
+  return sendSuccess(res, {
+    user: result.user,
+    token: result.token,
+    refreshToken: result.refreshToken,
+  }, "Login berhasil", 200);
+});
 
-    // Generate tokens
-    const userId = insertedId.$oid || insertedId;
-    const token = generateToken({
-      id: userId,
-      email: email,
-      role: role || "user",
-    });
+/**
+ * Refresh access token
+ * @route POST /api/auth/refresh
+ * @param {string} refreshToken - Refresh token dari login response
+ * @returns {Object} { success, message, token }
+ */
+exports.refreshToken = asyncHandler(async (req, res) => {
+  const { refreshToken } = req.body;
 
-    const refreshToken = generateRefreshToken({
-      id: userId,
-    });
-
-    // Response
-    res.status(201).json({
-      success: true,
-      message: "Registrasi berhasil",
-      token,
-      refreshToken,
-      user: {
-        id: userId,
-        name: name,
-        email: email,
-        role: role || "user",
-      },
-    });
-  } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (!refreshToken) {
+    return sendBadRequest(res, "Refresh token diperlukan");
   }
-};
 
-// ========================================
-// LOGIN
-// ========================================
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  // Call service
+  const result = await authService.refreshToken(refreshToken);
 
-    // Validasi input
-    const { error } = validateLogin(req.body);
-    if (error) {
-      return res.status(400).json({
-        message: error.details[0].message,
-      });
-    }
+  // Response
+  return sendSuccess(res, {
+    token: result.token,
+  }, "Token berhasil diperbarui");
+});
 
-    // Cek user exists
-    const userResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { email },
-      limit: 1,
-      projection: { _id: 1, name: 1, email: 1, role: 1, password: 1, createdAt: 1, updatedAt: 1 }
-    });
+/**
+ * Get user profile
+ * @route GET /api/auth/profile
+ * @returns {Object} { success, message, user }
+ */
+exports.getProfile = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
 
-    const user = userResult.cursor.firstBatch[0];
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Email atau password salah",
-      });
-    }
+  // Get user data dari service
+  const userService = require("../services/userService");
+  const user = await userService.getProfile(userId);
 
-    // Verify password
-    const valid = await comparePassword(password, user.password);
-    if (!valid) {
-      return res.status(401).json({
-        success: false,
-        message: "Email atau password salah",
-      });
-    }
+  // Response
+  return sendSuccess(res, { user }, "Profile berhasil diambil");
+});
 
-    // Generate tokens  
-    const userId = user._id.$oid || user._id;
-    const token = generateToken({
-      id: userId,
-      email: user.email,
-      role: user.role,
-    });
+/**
+ * Logout user
+ * @route POST /api/auth/logout
+ * @returns {Object} { success, message }
+ */
+exports.logout = asyncHandler(async (req, res) => {
+  // Untuk stateless JWT, logout dilakukan di client side (hapus token)
+  // Jika pakai Redis/database untuk blacklist token, tambahkan di sini
 
-    const refreshToken = generateRefreshToken({
-      id: userId,
-    });
-
-    // Response
-    res.status(200).json({
-      success: true,
-      message: "Login berhasil",
-      token,
-      refreshToken,
-      user: {
-        id: userId,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
-  }
-};
-
-// ========================================
-// LOGOUT
-// ========================================
-exports.logout = async (req, res) => {
-  try {
-    // Untuk stateless JWT, logout dilakukan di client side (hapus token)
-    // Jika pakai Redis/database untuk blacklist token, tambahkan di sini
-
-    res.status(200).json({
-      success: true,
-      message: "Logout berhasil",
-    });
-  } catch (err) {
-    console.error("Logout error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
-  }
-};
-
-// ========================================
-// REFRESH TOKEN
-// ========================================
-exports.refreshToken = async (req, res) => {
-  try {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Refresh token tidak tersedia",
-      });
-    }
-
-    // Verify refresh token
-    const jwt = require("jsonwebtoken");
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-
-    // Handle both string IDs and ObjectId format from JWT
-    let refreshUserId = decoded.id;
-    if (typeof refreshUserId === 'object' && refreshUserId.$oid) {
-      refreshUserId = refreshUserId.$oid;
-    }
-
-    // Get user
-    const userResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { _id: new ObjectId(refreshUserId) },
-      limit: 1
-    });
-
-    if (userResult.cursor.firstBatch.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "User tidak ditemukan",
-      });
-    }
-
-    const user = userResult.cursor.firstBatch[0];
-
-    // Generate new tokens
-    const refreshTokenUserId = user._id.$oid || user._id;
-    const newToken = generateToken({
-      id: refreshTokenUserId,
-      email: user.email,
-      role: user.role,
-    });
-
-    const newRefreshToken = generateRefreshToken({
-      id: refreshTokenUserId,
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Token berhasil diperbarui",
-      token: newToken,
-      refreshToken: newRefreshToken,
-    });
-  } catch (err) {
-    console.error("Refresh token error:", err);
-    res.status(401).json({
-      success: false,
-      message: "Refresh token tidak valid atau expired",
-    });
-  }
-};
-
-// ========================================
-// GET PROFILE (dari token)
-// ========================================
-exports.getProfile = async (req, res) => {
-  try {
-    // Use email from JWT to find user (more reliable than _id with aggregate)
-    const userEmail = req.user.email;
-
-    // Use find query with email
-    const userResult = await prisma.$runCommandRaw({
-      find: "users",
-      filter: { email: userEmail },
-      limit: 1,
-      projection: {
-        _id: 1,
-        name: 1,
-        email: 1,
-        role: 1,
-        createdAt: 1,
-        updatedAt: 1,
-      }
-    });
-
-    if (userResult.cursor.firstBatch.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "User tidak ditemukan",
-      });
-    }
-
-    const user = userResult.cursor.firstBatch[0];
-
-    res.status(200).json({
-      success: true,
-      message: "Profile berhasil diambil",
-      user: {
-        id: user._id.$oid || user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt?.$date ? new Date(user.createdAt.$date) : new Date(user.createdAt),
-        updatedAt: user.updatedAt?.$date ? new Date(user.updatedAt.$date) : new Date(user.updatedAt),
-      },
-    });
-  } catch (err) {
-    console.error("Get profile error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
-  }
-};
+  return sendSuccess(res, {}, "Logout berhasil");
+});
