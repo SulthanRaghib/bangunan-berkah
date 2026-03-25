@@ -20,3 +20,32 @@ model Review {
 
     @@map("reviews")
 }
+
+model Testimonial {
+    id              String   @id @default(auto()) @map("_id") @db.ObjectId
+    name            String
+    email           String
+    company         String?
+    position        String?
+    testimonialText String
+    rating          Int // 1-5 rating
+    photos          String[] // Base64 or URLs
+    isApproved      Boolean  @default(false)
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@map("testimonials")
+}
+
+model QA {
+    id            String   @id @default(auto()) @map("_id") @db.ObjectId
+    customerName  String
+    customerEmail String
+    question      String
+    answer        String?
+    status        String   @default("open") // open, answered
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    @@map("qas")
+}
