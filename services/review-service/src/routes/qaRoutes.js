@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const qaController = require("../controllers/qaController");
-const authMiddleware = require("../middlewares/authMiddleware");
-const roleMiddleware = require("../middlewares/roleMiddleware");
+const { authMiddleware, roleMiddleware } = require("../../../../shared");
 
 /**
  * @swagger
