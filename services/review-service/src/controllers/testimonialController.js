@@ -1,414 +1,128 @@
-const { PrismaClient } = require("@prisma/client");
-const Joi = require("joi");
-const { ObjectId } = require("mongodb");
+const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
+const { testimonialSchema } = require("../utils/validation");
+const testimonialService = require("../services/testimonialService");
 
-const prisma = new PrismaClient();
+/**
+ * Create Testimonial
+ * POST /api/testimonials
+ * Public endpoint - No auth required
+ */
+exports.createTestimonial = asyncHandler(async (req, res) => {
+    const value = await validate(testimonialSchema, req.body);
 
-// Validation Schema
-const testimonialSchema = Joi.object({
-    name: Joi.string().required().min(3).max(100),
-    email: Joi.string().email().required(),
-    company: Joi.string().optional().max(100),
-    position: Joi.string().optional().max(100),
-    testimonialText: Joi.string().required().min(10).max(5000),
-    rating: Joi.number().integer().min(1).max(5).required(),
-    photos: Joi.array().items(Joi.string()).optional(),
+    const testimonial = await testimonialService.createTestimonial(value);
+
+    return sendCreated(
+        res,
+        testimonial,
+        "Testimoni Anda berhasil dikirimkan. Menunggu persetujuan admin."
+    );
 });
 
-// Create Testimonial (Public - No Auth Required)
-exports.createTestimonial = async (req, res) => {
-    try {
-        const { error, value } = testimonialSchema.validate(req.body);
+/**
+ * Get Approved Testimonials
+ * GET /api/testimonials/approved
+ * Public endpoint
+ */
+exports.getApprovedTestimonials = asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
 
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: "Validation error",
-                errors: error.details.map((e) => e.message),
-            });
-        }
+    const result = await testimonialService.getApprovedTestimonials({
+        page,
+        limit,
+    });
 
-        const testimonialId = new ObjectId();
+    return sendSuccess(res, {
+        data: result.data,
+        pagination: result.pagination,
+    }, "Testimoni disetujui berhasil diambil");
+});
 
-        await prisma.$runCommandRaw({
-            insert: "testimonials",
-            documents: [{
-                _id: testimonialId,
-                name: value.name,
-                email: value.email,
-                company: value.company || null,
-                position: value.position || null,
-                testimonialText: value.testimonialText,
-                rating: value.rating,
-                photos: value.photos || [],
-                isApproved: false,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            }],
-        });
 
-        const testimonial = {
-            id: testimonialId.toString(),
-            name: value.name,
-            email: value.email,
-            company: value.company || null,
-            position: value.position || null,
-            testimonialText: value.testimonialText,
-            rating: value.rating,
-            photos: value.photos || [],
-            isApproved: false,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+/**
+ * Get All Testimonials
+ * GET /api/testimonials
+ * Admin endpoint
+ */
+exports.getAllTestimonials = asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status || "all";
 
-        res.status(201).json({
-            success: true,
-            message: "Testimonial submitted successfully. Awaiting admin approval.",
-            data: testimonial,
-        });
-    } catch (error) {
-        console.error("Error creating testimonial:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to create testimonial",
-            error: error.message,
-        });
-    }
-};
+    const result = await testimonialService.getAllTestimonials({
+        page,
+        limit,
+        status,
+    });
 
-// Get All Approved Testimonials (Public)
-exports.getApprovedTestimonials = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
+    return sendSuccess(res, {
+        data: result.data,
+        pagination: result.pagination,
+    }, "Daftar testimoni berhasil diambil");
+});
 
-        const testimonialsResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { isApproved: true },
-            sort: { createdAt: -1 },
-            skip,
-            limit,
-        });
+/**
+ * Get Testimonial by ID
+ * GET /api/testimonials/:id
+ * Admin endpoint
+ */
+exports.getTestimonialById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const countResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { isApproved: true },
-        });
+    const testimonial = await testimonialService.getTestimonialById(id);
 
-        const testimonials = testimonialsResult.cursor.firstBatch.map((doc) => ({
-            id: doc._id.$oid || doc._id,
-            ...doc,
-            _id: undefined,
-        }));
+    return sendSuccess(res, testimonial, "Testimoni berhasil diambil");
+});
 
-        const total = countResult.cursor.firstBatch.length;
+/**
+ * Approve Testimonial
+ * PATCH /api/testimonials/:id/approve
+ * Admin endpoint
+ */
+exports.approveTestimonial = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        res.status(200).json({
-            success: true,
-            data: testimonials,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        });
-    } catch (error) {
-        console.error("Error fetching approved testimonials:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch testimonials",
-            error: error.message,
-        });
-    }
-};
+    const testimonial = await testimonialService.approveTestimonial(id);
 
-// Get All Testimonials (Admin Only)
-exports.getAllTestimonials = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
-        const status = req.query.status || "all";
+    return sendSuccess(res, testimonial, "Testimoni disetujui");
+});
 
-        let filter = {};
-        if (status === "approved") filter.isApproved = true;
-        if (status === "pending") filter.isApproved = false;
+/**
+ * Reject Testimonial
+ * PATCH /api/testimonials/:id/reject
+ * Admin endpoint
+ */
+exports.rejectTestimonial = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const testimonialsResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter,
-            sort: { createdAt: -1 },
-            skip,
-            limit,
-        });
+    const testimonial = await testimonialService.rejectTestimonial(id);
 
-        const countResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter,
-        });
+    return sendSuccess(res, testimonial, "Testimoni ditolak");
+});
 
-        const testimonials = testimonialsResult.cursor.firstBatch.map((doc) => ({
-            id: doc._id.$oid || doc._id,
-            ...doc,
-            _id: undefined,
-        }));
+/**
+ * Update Testimonial
+ * PUT /api/testimonials/:id
+ * Admin endpoint
+ */
+exports.updateTestimonial = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const total = countResult.cursor.firstBatch.length;
+    const testimonial = await testimonialService.updateTestimonial(id, req.body);
 
-        res.status(200).json({
-            success: true,
-            data: testimonials,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        });
-    } catch (error) {
-        console.error("Error fetching testimonials:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch testimonials",
-            error: error.message,
-        });
-    }
-};
+    return sendSuccess(res, testimonial, "Testimoni berhasil diperbarui");
+});
 
-// Get Single Testimonial (Admin Only)
-exports.getTestimonialById = async (req, res) => {
-    try {
-        const { id } = req.params;
+/**
+ * Delete Testimonial
+ * DELETE /api/testimonials/:id
+ * Admin endpoint
+ */
+exports.deleteTestimonial = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const testimonialResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
+    await testimonialService.deleteTestimonial(id);
 
-        if (testimonialResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Testimonial not found",
-            });
-        }
-
-        const testimonial = testimonialResult.cursor.firstBatch[0];
-
-        res.status(200).json({
-            success: true,
-            data: {
-                id: testimonial._id.$oid || testimonial._id,
-                ...testimonial,
-                _id: undefined,
-            },
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid testimonial ID",
-            });
-        }
-        console.error("Error fetching testimonial:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch testimonial",
-            error: error.message,
-        });
-    }
-};
-
-// Update Testimonial (Admin Only)
-exports.updateTestimonial = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updateSchema = Joi.object({
-            name: Joi.string().optional().min(3).max(100),
-            email: Joi.string().email().optional(),
-            company: Joi.string().optional().max(100).allow(null),
-            position: Joi.string().optional().max(100).allow(null),
-            testimonialText: Joi.string().optional().min(10).max(5000),
-            rating: Joi.number().integer().min(1).max(5).optional(),
-            photos: Joi.array().items(Joi.string()).optional(),
-            isApproved: Joi.boolean().optional(),
-        });
-
-        const { error, value } = updateSchema.validate(req.body);
-
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: "Validation error",
-                errors: error.details.map((e) => e.message),
-            });
-        }
-
-        // Check if exists
-        const existResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        if (existResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Testimonial not found",
-            });
-        }
-
-        await prisma.$runCommandRaw({
-            update: "testimonials",
-            updates: [{
-                q: { _id: new ObjectId(id) },
-                u: { $set: { ...value, updatedAt: new Date() } },
-                upsert: false,
-            }],
-        });
-
-        // Fetch updated document
-        const updatedResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        const testimonial = updatedResult.cursor.firstBatch[0];
-
-        res.status(200).json({
-            success: true,
-            message: "Testimonial updated successfully",
-            data: {
-                id: testimonial._id.$oid || testimonial._id,
-                ...testimonial,
-                _id: undefined,
-            },
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid testimonial ID",
-            });
-        }
-        console.error("Error updating testimonial:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update testimonial",
-            error: error.message,
-        });
-    }
-};
-
-// Delete Testimonial (Admin Only)
-exports.deleteTestimonial = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const deleteResult = await prisma.$runCommandRaw({
-            delete: "testimonials",
-            deletes: [{
-                q: { _id: new ObjectId(id) },
-                limit: 1,
-            }],
-        });
-
-        if (deleteResult.n === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Testimonial not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Testimonial deleted successfully",
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid testimonial ID",
-            });
-        }
-        console.error("Error deleting testimonial:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to delete testimonial",
-            error: error.message,
-        });
-    }
-};
-
-// Approve/Reject Testimonial (Admin Only)
-exports.approveTestimonial = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { isApproved } = req.body;
-
-        if (typeof isApproved !== "boolean") {
-            return res.status(400).json({
-                success: false,
-                message: "isApproved must be a boolean",
-            });
-        }
-
-        // Check if exists
-        const existResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        if (existResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Testimonial not found",
-            });
-        }
-
-        await prisma.$runCommandRaw({
-            update: "testimonials",
-            updates: [{
-                q: { _id: new ObjectId(id) },
-                u: { $set: { isApproved, updatedAt: new Date() } },
-                upsert: false,
-            }],
-        });
-
-        // Fetch updated document
-        const updatedResult = await prisma.$runCommandRaw({
-            find: "testimonials",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        const testimonial = updatedResult.cursor.firstBatch[0];
-
-        res.status(200).json({
-            success: true,
-            message: isApproved ? "Testimonial approved" : "Testimonial rejected",
-            data: {
-                id: testimonial._id.$oid || testimonial._id,
-                ...testimonial,
-                _id: undefined,
-            },
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid testimonial ID",
-            });
-        }
-        console.error("Error approving testimonial:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update testimonial status",
-            error: error.message,
-        });
-    }
-};
+    return sendSuccess(res, null, "Testimoni berhasil dihapus");
+});

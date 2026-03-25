@@ -1,327 +1,95 @@
-const { PrismaClient } = require("@prisma/client");
-const Joi = require("joi");
-const { ObjectId } = require("mongodb");
+const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
+const { qaSchema, answerSchema } = require("../utils/validation");
+const qaService = require("../services/qaService");
 
-const prisma = new PrismaClient();
+/**
+ * Create Question
+ * POST /api/qas
+ * Public endpoint - No auth required
+ */
+exports.createQuestion = asyncHandler(async (req, res) => {
+    const value = await validate(qaSchema, req.body);
 
-// Validation Schema
-const qaSchema = Joi.object({
-    customerName: Joi.string().required().min(3).max(100),
-    customerEmail: Joi.string().email().required(),
-    question: Joi.string().required().min(10).max(2000),
+    const qa = await qaService.createQuestion(value);
+
+    return sendCreated(
+        res,
+        qa,
+        "Pertanyaan Anda berhasil dikirimkan. Admin akan menjawab segera."
+    );
 });
 
-const answerSchema = Joi.object({
-    answer: Joi.string().required().min(10).max(5000),
+/**
+ * Get Answered Questions
+ * GET /api/qas/answered
+ * Public endpoint - No pagination required in query, use defaults
+ */
+exports.getAnsweredQuestions = asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const result = await qaService.getAnsweredQuestions({ page, limit });
+
+    return sendSuccess(res, {
+        data: result.data,
+        pagination: result.pagination,
+    }, "Pertanyaan terjawab berhasil diambil");
 });
 
-// Create Question (Public - No Auth Required)
-exports.createQuestion = async (req, res) => {
-    try {
-        const { error, value } = qaSchema.validate(req.body);
+/**
+ * Get All Questions
+ * GET /api/qas
+ * Admin endpoint
+ */
+exports.getAllQuestions = asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status || "all";
 
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: "Validation error",
-                errors: error.details.map((e) => e.message),
-            });
-        }
+    const result = await qaService.getAllQuestions({ page, limit, status });
 
-        const qaId = new ObjectId();
+    return sendSuccess(res, {
+        data: result.data,
+        pagination: result.pagination,
+    }, "Daftar pertanyaan berhasil diambil");
+});
 
-        await prisma.$runCommandRaw({
-            insert: "qas",
-            documents: [{
-                _id: qaId,
-                customerName: value.customerName,
-                customerEmail: value.customerEmail,
-                question: value.question,
-                answer: null,
-                status: "open",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            }],
-        });
+/**
+ * Get Question by ID
+ * GET /api/qas/:id
+ * Admin endpoint
+ */
+exports.getQuestionById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const qa = {
-            id: qaId.toString(),
-            customerName: value.customerName,
-            customerEmail: value.customerEmail,
-            question: value.question,
-            answer: null,
-            status: "open",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+    const qa = await qaService.getQuestionById(id);
 
-        res.status(201).json({
-            success: true,
-            message: "Question submitted successfully. Admin will answer soon.",
-            data: qa,
-        });
-    } catch (error) {
-        console.error("Error creating question:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to submit question",
-            error: error.message,
-        });
-    }
-};
+    return sendSuccess(res, qa, "Pertanyaan berhasil diambil");
+});
 
-// Get All Answered Questions (Public)
-exports.getAnsweredQuestions = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
+/**
+ * Answer Question
+ * PATCH /api/qas/:id/answer
+ * Admin endpoint
+ */
+exports.answerQuestion = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const value = await validate(answerSchema, req.body);
 
-        const questionsResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter: { status: "answered" },
-            sort: { updatedAt: -1 },
-            skip,
-            limit,
-        });
+    const qa = await qaService.answerQuestion(id, value.answer);
 
-        const countResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter: { status: "answered" },
-        });
+    return sendSuccess(res, qa, "Pertanyaan berhasil dijawab");
+});
 
-        const questions = questionsResult.cursor.firstBatch.map((doc) => ({
-            id: doc._id.$oid || doc._id,
-            ...doc,
-            _id: undefined,
-        }));
+/**
+ * Delete Question
+ * DELETE /api/qas/:id
+ * Admin endpoint
+ */
+exports.deleteQuestion = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const total = countResult.cursor.firstBatch.length;
+    await qaService.deleteQuestion(id);
 
-        res.status(200).json({
-            success: true,
-            data: questions,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        });
-    } catch (error) {
-        console.error("Error fetching questions:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch questions",
-            error: error.message,
-        });
-    }
-};
-
-// Get All Questions (Admin Only)
-exports.getAllQuestions = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
-        const status = req.query.status || "all"; // all, open, answered
-
-        let filter = {};
-        if (status === "open") filter.status = "open";
-        if (status === "answered") filter.status = "answered";
-
-        const questionsResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter,
-            sort: { createdAt: "desc" },
-            skip,
-            limit,
-        });
-
-        const countResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter,
-        });
-
-        const questions = questionsResult.cursor.firstBatch.map((doc) => ({
-            id: doc._id.$oid || doc._id,
-            ...doc,
-            _id: undefined,
-        }));
-
-        const total = countResult.cursor.firstBatch.length;
-
-        res.status(200).json({
-            success: true,
-            data: questions,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        });
-    } catch (error) {
-        console.error("Error fetching questions:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch questions",
-            error: error.message,
-        });
-    }
-};
-
-// Get Single Question (Admin Only)
-exports.getQuestionById = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const questionResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        if (questionResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Question not found",
-            });
-        }
-
-        const question = questionResult.cursor.firstBatch[0];
-
-        res.status(200).json({
-            success: true,
-            data: {
-                id: question._id.$oid || question._id,
-                ...question,
-                _id: undefined,
-            },
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid question ID",
-            });
-        }
-        console.error("Error fetching question:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch question",
-            error: error.message,
-        });
-    }
-};
-
-// Answer Question (Admin Only)
-exports.answerQuestion = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { error, value } = answerSchema.validate(req.body);
-
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: "Validation error",
-                errors: error.details.map((e) => e.message),
-            });
-        }
-
-        // Check if exists
-        const existResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        if (existResult.cursor.firstBatch.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Question not found",
-            });
-        }
-
-        await prisma.$runCommandRaw({
-            update: "qas",
-            updates: [{
-                q: { _id: new ObjectId(id) },
-                u: { $set: { answer: value.answer, status: "answered", updatedAt: new Date() } },
-                upsert: false,
-            }],
-        });
-
-        // Fetch updated document
-        const updatedResult = await prisma.$runCommandRaw({
-            find: "qas",
-            filter: { _id: new ObjectId(id) },
-            limit: 1,
-        });
-
-        const question = updatedResult.cursor.firstBatch[0];
-
-        res.status(200).json({
-            success: true,
-            message: "Question answered successfully",
-            data: {
-                id: question._id.$oid || question._id,
-                ...question,
-                _id: undefined,
-            },
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid question ID",
-            });
-        }
-        console.error("Error answering question:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to answer question",
-            error: error.message,
-        });
-    }
-};
-
-// Delete Question (Admin Only)
-exports.deleteQuestion = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const deleteResult = await prisma.$runCommandRaw({
-            delete: "qas",
-            deletes: [{
-                q: { _id: new ObjectId(id) },
-                limit: 1,
-            }],
-        });
-
-        if (deleteResult.n === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Question not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Question deleted successfully",
-        });
-    } catch (error) {
-        if (error.message.includes("BsonError")) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid question ID",
-            });
-        }
-        console.error("Error deleting question:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to delete question",
-            error: error.message,
-        });
-    }
-};
+    return sendSuccess(res, null, "Pertanyaan berhasil dihapus");
+});
