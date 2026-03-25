@@ -78,7 +78,7 @@ const errorHandler = (err, req, res, next) => {
     if (err.statusCode === 401 || err.status === 401) {
         return res.status(401).json({
             success: false,
-            message: err.message || "Unauthorized",
+            message: err.message || "Tidak terautentikasi",
         });
     }
 
@@ -86,7 +86,7 @@ const errorHandler = (err, req, res, next) => {
     if (err.statusCode === 403 || err.status === 403) {
         return res.status(403).json({
             success: false,
-            message: err.message || "Forbidden",
+            message: err.message || "Akses ditolak",
         });
     }
 
@@ -94,15 +94,19 @@ const errorHandler = (err, req, res, next) => {
     if (err.statusCode === 400 || err.status === 400) {
         return res.status(400).json({
             success: false,
-            message: err.message || "Bad Request",
+            message: err.message || "Permintaan tidak valid",
         });
     }
 
     // Default server error
-    return res.status(err.statusCode || err.status || 500).json({
+    const statusCode = err.statusCode || err.status || 500;
+    const isServerError = statusCode >= 500;
+
+    return res.status(statusCode).json({
         success: false,
-        message:
-            err.message || "Terjadi kesalahan server",
+        message: isServerError
+            ? "Terjadi kesalahan pada server"
+            : err.message || "Terjadi kesalahan",
         error:
             process.env.NODE_ENV === "development" ? err.message : undefined,
     });
