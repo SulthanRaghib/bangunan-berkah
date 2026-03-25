@@ -14,6 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
+
 // Serve Swagger JSON for Gateway Aggregation
 app.get('/api/projects/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -120,7 +121,7 @@ app.use("/api/projects", milestoneRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api", documentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/health", healthRoutes);
+app.use(healthRoutes);
 
 // Root route: basic service info (helps quick checks at http://localhost:PORT/)
 app.get("/", (req, res) => {
@@ -133,15 +134,12 @@ app.get("/", (req, res) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ success: false, message: "Endpoint tidak ditemukan" });
-});
+// Handle 404
+const { errorHandler, notFoundHandler } = require("../../../shared");
 
-// Error handler
-app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message || "Internal Server Error" });
-});
+app.use(notFoundHandler);
+
+// Centralized error handler middleware (must be last)
+app.use(errorHandler);
 
 module.exports = app;
