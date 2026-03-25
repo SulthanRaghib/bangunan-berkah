@@ -1,11 +1,12 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
+const swaggerDocs = require("./config/swagger");
 const reviewRoutes = require("./routes/reviewRoutes");
 const testimonialRoutes = require("./routes/testimonialRoutes");
 const qaRoutes = require("./routes/qaRoutes");
+const { errorHandler, notFoundHandler } = require("../../../shared");
 
 const app = express();
 
@@ -13,36 +14,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
-
-// Swagger Config
-const swaggerOptions = {
-    swaggerDefinition: {
-        openapi: "3.0.0",
-        info: {
-            title: "Review Service API",
-            version: "1.0.0",
-            description: "API for managing project reviews",
-        },
-        servers: [
-            {
-                url: "http://localhost:8005",
-                description: "Local server",
-            },
-        ],
-        components: {
-            securitySchemes: {
-                bearerAuth: {
-                    type: "http",
-                    scheme: "bearer",
-                    bearerFormat: "JWT",
-                },
-            },
-        },
-    },
-    apis: ["./src/routes/*.js"],
-};
-
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 // Serve Swagger JSON for Gateway Aggregation
 app.get('/api/reviews/api-docs.json', (req, res) => {
@@ -59,12 +30,25 @@ app.use("/api/qa", qaRoutes);
 
 // Health Check
 app.get("/health", (req, res) => {
-    res.status(200).json({ status: "UP", service: "review-service" });
+    res.status(200).json({
+        status: "healthy",
+        service: "review-service",
+        timestamp: new Date().toISOString(),
+    });
+});
+
+app.get("/health/ready", (req, res) => {
+    res.status(200).json({ ready: true });
+});
+
+app.get("/health/live", (req, res) => {
+    res.status(200).json({ alive: true });
 });
 
 // 404 Handler
-app.use((req, res) => {
-    res.status(404).json({ success: false, message: "Endpoint not found" });
-});
+app.use(notFoundHandler);
+
+// Centralized Error Handler (must be last)
+app.use(errorHandler);
 
 module.exports = app;
