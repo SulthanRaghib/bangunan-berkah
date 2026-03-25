@@ -1,265 +1,212 @@
 const prisma = require("../config/prisma");
 const {
-  validateCreateCategory,
-  validateUpdateCategory,
+  createCategorySchema,
+  updateCategorySchema,
 } = require("../utils/validation");
 const {
+  asyncHandler,
+  validate,
+  sendSuccess,
+  sendBadRequest,
+  sendNotFound,
   getPaginationParams,
-  getPaginationMeta,
-} = require("../utils/pagination");
+  buildPaginatedResponse,
+} = require("../../../shared");
 
-// ========================================
-// CREATE CATEGORY
-// ========================================
-exports.createCategory = async (req, res) => {
-  try {
-    const { name, description, icon } = req.body;
+/**
+ * Create category
+ * @route POST /api/categories
+ * @param {string} name - Category name
+ * @param {string} description - Category description (optional)
+ * @param {string} icon - Category icon (optional)
+ * @returns {Object} { success, message, data }
+ */
+exports.createCategory = asyncHandler(async (req, res) => {
+  // Validate input using shared validate
+  const value = await validate(createCategorySchema, req.body);
+  const { name, description, icon } = value;
 
-    // Validation
-    const { error } = validateCreateCategory(req.body);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.details[0].message,
-      });
-    }
+  // Generate slug
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-    // Generate slug
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
-    // Check if slug exists
-    const existing = await prisma.category.findUnique({ where: { slug } });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Kategori dengan nama tersebut sudah ada",
-      });
-    }
-
-    // Create category
-    const category = await prisma.category.create({
-      data: { name, slug, description, icon },
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Kategori berhasil dibuat",
-      data: category,
-    });
-  } catch (err) {
-    console.error("Create category error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  // Check if slug exists
+  const existing = await prisma.category.findUnique({ where: { slug } });
+  if (existing) {
+    return sendBadRequest(res, "Kategori dengan nama tersebut sudah ada");
   }
-};
 
-// ========================================
-// GET ALL CATEGORIES
-// ========================================
-exports.getAllCategories = async (req, res) => {
-  try {
-    const { page, limit, skip } = getPaginationParams(req.query);
-    const { search, isActive } = req.query;
+  // Create category
+  const category = await prisma.category.create({
+    data: { name, slug, description, icon },
+  });
 
-    // Build where clause
-    const where = {};
-    if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
-      ];
-    }
-    if (isActive !== undefined) {
-      where.isActive = isActive === "true";
-    }
+  return sendSuccess(res, category, "Kategori berhasil dibuat", 201);
+});
 
-    // Get categories with pagination
-    const [categories, total] = await Promise.all([
-      prisma.category.findMany({
-        where,
-        include: {
-          _count: {
-            select: { products: true },
-          },
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.category.count({ where }),
-    ]);
+/**
+ * Get all categories with pagination
+ * @route GET /api/categories
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Items per page (default: 10)
+ * @param {string} search - Search term (optional)
+ * @param {boolean} isActive - Filter by active (optional)
+ * @returns {Object} { success, message, data, pagination }
+ */
+exports.getAllCategories = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search, isActive } = req.query;
 
-    res.status(200).json({
-      success: true,
-      message: "Kategori berhasil diambil",
-      data: categories,
-      pagination: getPaginationMeta(total, page, limit),
-    });
-  } catch (err) {
-    console.error("Get categories error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  // Build where clause
+  const where = {};
+  if (search) {
+    where.OR = [
+      { name: { contains: search } },
+      { description: { contains: search } },
+    ];
   }
-};
-
-// ========================================
-// GET CATEGORY BY ID
-// ========================================
-exports.getCategoryById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        products: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            price: true,
-            images: true,
-            isActive: true,
-          },
-          where: { isActive: true },
-          take: 10,
-        },
-        _count: {
-          select: { products: true },
-        },
-      },
-    });
-
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Kategori tidak ditemukan",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Kategori berhasil diambil",
-      data: category,
-    });
-  } catch (err) {
-    console.error("Get category error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (isActive !== undefined) {
+    where.isActive = isActive === "true";
   }
-};
 
-// ========================================
-// UPDATE CATEGORY
-// ========================================
-exports.updateCategory = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, description, icon, isActive } = req.body;
-
-    // Validation
-    const { error } = validateUpdateCategory(req.body);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.details[0].message,
-      });
-    }
-
-    // Check exists
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
-    });
-
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Kategori tidak ditemukan",
-      });
-    }
-
-    // Prepare update data
-    const updateData = {};
-    if (name) {
-      updateData.name = name;
-      updateData.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    }
-    if (description !== undefined) updateData.description = description;
-    if (icon !== undefined) updateData.icon = icon;
-    if (isActive !== undefined) updateData.isActive = isActive;
-
-    // Update
-    const updated = await prisma.category.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Kategori berhasil diperbarui",
-      data: updated,
-    });
-  } catch (err) {
-    console.error("Update category error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
-  }
-};
-
-// ========================================
-// DELETE CATEGORY
-// ========================================
-exports.deleteCategory = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Check exists
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
+  // Get categories with pagination
+  const [categories, total] = await Promise.all([
+    prisma.category.findMany({
+      where,
       include: {
         _count: {
           select: { products: true },
         },
       },
-    });
+      skip,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.category.count({ where }),
+  ]);
 
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Kategori tidak ditemukan",
-      });
-    }
+  return sendSuccess(res, {
+    data: categories,
+    pagination: buildPaginatedResponse(total, page, limit),
+  }, "Kategori berhasil diambil");
+});
 
-    // Check if has products
-    if (category._count.products > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Tidak dapat menghapus kategori yang memiliki ${category._count.products} produk`,
-      });
-    }
+/**
+ * Get category by ID with products
+ * @route GET /api/categories/:id
+ * @param {number} id - Category ID
+ * @returns {Object} { success, message, data }
+ */
+exports.getCategoryById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-    // Delete
-    await prisma.category.delete({
-      where: { id: parseInt(id) },
-    });
+  const category = await prisma.category.findUnique({
+    where: { id: parseInt(id) },
+    include: {
+      products: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          price: true,
+          images: true,
+          isActive: true,
+        },
+        where: { isActive: true },
+        take: 10,
+      },
+      _count: {
+        select: { products: true },
+      },
+    },
+  });
 
-    res.status(200).json({
-      success: true,
-      message: "Kategori berhasil dihapus",
-    });
-  } catch (err) {
-    console.error("Delete category error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (!category) {
+    return sendNotFound(res, "Kategori tidak ditemukan");
   }
-};
+
+  return sendSuccess(res, category, "Kategori berhasil diambil");
+});
+
+/**
+ * Update category
+ * @route PUT /api/categories/:id
+ * @param {number} id - Category ID
+ * @param {string} name - Category name (optional)
+ * @param {string} description - Category description (optional)
+ * @param {string} icon - Category icon (optional)
+ * @param {boolean} isActive - Active status (optional)
+ * @returns {Object} { success, message, data }
+ */
+exports.updateCategory = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Validate input using shared validate
+  const value = await validate(updateCategorySchema, req.body);
+  const { name, description, icon, isActive } = value;
+
+  // Check exists
+  const category = await prisma.category.findUnique({
+    where: { id: parseInt(id) },
+  });
+
+  if (!category) {
+    return sendNotFound(res, "Kategori tidak ditemukan");
+  }
+
+  // Prepare update data
+  const updateData = {};
+  if (name) {
+    updateData.name = name;
+    updateData.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  }
+  if (description !== undefined) updateData.description = description;
+  if (icon !== undefined) updateData.icon = icon;
+  if (isActive !== undefined) updateData.isActive = isActive;
+
+  // Update
+  const updated = await prisma.category.update({
+    where: { id: parseInt(id) },
+    data: updateData,
+  });
+
+  return sendSuccess(res, updated, "Kategori berhasil diperbarui");
+});
+
+/**
+ * Delete category
+ * @route DELETE /api/categories/:id
+ * @param {number} id - Category ID
+ * @returns {Object} { success, message }
+ */
+exports.deleteCategory = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check exists
+  const category = await prisma.category.findUnique({
+    where: { id: parseInt(id) },
+    include: {
+      _count: {
+        select: { products: true },
+      },
+    },
+  });
+
+  if (!category) {
+    return sendNotFound(res, "Kategori tidak ditemukan");
+  }
+
+  // Check if has products
+  if (category._count.products > 0) {
+    return sendBadRequest(
+      res,
+      `Tidak dapat menghapus kategori yang memiliki ${category._count.products} produk`
+    );
+  }
+
+  // Delete
+  await prisma.category.delete({
+    where: { id: parseInt(id) },
+  });
+
+  return sendSuccess(res, {}, "Kategori berhasil dihapus");
+});

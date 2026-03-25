@@ -1,116 +1,47 @@
 const prisma = require("../config/prisma");
-const { validateUpdateStock } = require("../utils/validation");
+const { updateStockSchema } = require("../utils/validation");
 const {
+  asyncHandler,
+  validate,
+  sendSuccess,
+  sendBadRequest,
+  sendNotFound,
   getPaginationParams,
-  getPaginationMeta,
-} = require("../utils/pagination");
+  buildPaginatedResponse,
+} = require("../../../shared");
 
-// ========================================
-// GET ALL INVENTORY
-// ========================================
-exports.getAllInventory = async (req, res) => {
-  try {
-    const { page, limit, skip } = getPaginationParams(req.query);
-    const { search, lowStock } = req.query;
+/**
+ * Get all inventory with pagination
+ * @route GET /api/inventory
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Items per page (default: 10)
+ * @param {string} search - Search term (optional)
+ * @param {boolean} lowStock - Filter low stock items (optional)
+ * @returns {Object} { success, message, data, pagination }
+ */
+exports.getAllInventory = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search, lowStock } = req.query;
 
-    // Build where clause
-    const where = {};
+  // Build where clause
+  const where = {};
 
-    if (lowStock === "true") {
-      where.stock = {
-        lt: prisma.inventory.fields.minStock,
-      };
-    }
-
-    if (search) {
-      where.product = {
-        OR: [{ name: { contains: search } }, { sku: { contains: search } }],
-      };
-    }
-
-    // Get inventory
-    const [inventories, total] = await Promise.all([
-      prisma.inventory.findMany({
-        where,
-        include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              sku: true,
-              price: true,
-              category: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-        skip,
-        take: limit,
-        orderBy: { updatedAt: "desc" },
-      }),
-      prisma.inventory.count({ where }),
-    ]);
-
-    res.status(200).json({
-      success: true,
-      message: "Inventory berhasil diambil",
-      data: inventories,
-      pagination: getPaginationMeta(total, page, limit),
-    });
-  } catch (err) {
-    console.error("Get inventory error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (lowStock === "true") {
+    where.stock = {
+      lt: prisma.inventory.fields.minStock,
+    };
   }
-};
 
-// ========================================
-// GET LOW STOCK
-// ========================================
-exports.getLowStock = async (req, res) => {
-  try {
-    const lowStockProducts = await prisma.$queryRaw`
-      SELECT 
-        i.*,
-        p.name,
-        p.sku,
-        c.name as category_name
-      FROM inventories i
-      JOIN products p ON i.productId = p.id
-      JOIN categories c ON p.categoryId = c.id
-      WHERE i.stock < i.minStock
-      ORDER BY i.stock ASC
-    `;
-
-    res.status(200).json({
-      success: true,
-      message: "Produk dengan stock rendah",
-      data: lowStockProducts,
-      count: lowStockProducts.length,
-    });
-  } catch (err) {
-    console.error("Get low stock error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (search) {
+    where.product = {
+      OR: [{ name: { contains: search } }, { sku: { contains: search } }],
+    };
   }
-};
 
-// ========================================
-// GET INVENTORY BY PRODUCT
-// ========================================
-exports.getInventoryByProduct = async (req, res) => {
-  try {
-    const { productId } = req.params;
-
-    const inventory = await prisma.inventory.findUnique({
-      where: { productId: parseInt(productId) },
+  // Get inventory
+  const [inventories, total] = await Promise.all([
+    prisma.inventory.findMany({
+      where,
       include: {
         product: {
           select: {
@@ -118,199 +49,214 @@ exports.getInventoryByProduct = async (req, res) => {
             name: true,
             sku: true,
             price: true,
+            category: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
-    });
+      skip,
+      take: limit,
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.inventory.count({ where }),
+  ]);
 
-    if (!inventory) {
-      return res.status(404).json({
-        success: false,
-        message: "Inventory tidak ditemukan",
-      });
-    }
+  return sendSuccess(res, {
+    data: inventories,
+    pagination: buildPaginatedResponse(total, page, limit),
+  }, "Inventory berhasil diambil");
+});
 
-    res.status(200).json({
-      success: true,
-      message: "Inventory berhasil diambil",
-      data: inventory,
-    });
-  } catch (err) {
-    console.error("Get inventory error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
-  }
-};
+/**
+ * Get products with low stock
+ * @route GET /api/inventory/low-stock/list
+ * @returns {Object} { success, message, data, count }
+ */
+exports.getLowStock = asyncHandler(async (req, res) => {
+  const lowStockProducts = await prisma.$queryRaw`
+    SELECT 
+      i.*,
+      p.name,
+      p.sku,
+      c.name as category_name
+    FROM inventories i
+    JOIN products p ON i.productId = p.id
+    JOIN categories c ON p.categoryId = c.id
+    WHERE i.stock < i.minStock
+    ORDER BY i.stock ASC
+  `;
 
-// ========================================
-// UPDATE STOCK
-// ========================================
-exports.updateStock = async (req, res) => {
-  try {
-    const { productId, type, quantity, description } = req.body;
+  return sendSuccess(res, lowStockProducts, "Produk dengan stock rendah");
+});
 
-    // Validation
-    const { error } = validateUpdateStock({ type, quantity, description });
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.details[0].message,
-      });
-    }
+/**
+ * Get inventory by product ID
+ * @route GET /api/inventory/product/:productId
+ * @param {number} productId - Product ID
+ * @returns {Object} { success, message, data }
+ */
+exports.getInventoryByProduct = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
 
-    if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message: "productId wajib diisi",
-      });
-    }
-
-    // Get current inventory
-    const inventory = await prisma.inventory.findUnique({
-      where: { productId: parseInt(productId) },
-    });
-
-    if (!inventory) {
-      return res.status(404).json({
-        success: false,
-        message: "Inventory tidak ditemukan",
-      });
-    }
-
-    // Calculate new stock
-    let newStock = inventory.stock;
-    if (type === "in") {
-      newStock += parseInt(quantity);
-    } else if (type === "out") {
-      newStock -= parseInt(quantity);
-
-      if (newStock < 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Stock tidak mencukupi",
-          currentStock: inventory.stock,
-        });
-      }
-    }
-
-    // Update inventory using Prisma methods (separate operations instead of transaction)
-    // Note: If you need true atomicity, configure MongoDB replica set
-
-    // 1. Update inventory
-    const updated = await prisma.inventory.update({
-      where: { productId: productId },
-      data: {
-        stock: newStock,
-        lastRestockDate: type === "in" ? new Date() : inventory.lastRestockDate,
-        lastRestockQty: type === "in" ? parseInt(quantity) : inventory.lastRestockQty,
+  const inventory = await prisma.inventory.findUnique({
+    where: { productId: parseInt(productId) },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          price: true,
+        },
       },
-    });
+    },
+  });
 
-    // 2. Create stock history
-    await prisma.stockHistory.create({
-      data: {
-        productId: productId,
-        type,
-        quantity: parseInt(quantity),
-        description,
-        createdBy: req.user.id,
-      },
-    });
-
-    const result = updated;
-
-    res.status(200).json({
-      success: true,
-      message: "Stock berhasil diperbarui",
-      data: result,
-    });
-  } catch (err) {
-    console.error("Update stock error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (!inventory) {
+    return sendNotFound(res, "Inventory tidak ditemukan");
   }
-};
 
-// ========================================
-// GET STOCK HISTORY
-// ========================================
-exports.getStockHistory = async (req, res) => {
-  try {
-    const { productId } = req.params;
-    const { page, limit, skip } = getPaginationParams(req.query);
+  return sendSuccess(res, inventory, "Inventory berhasil diambil");
+});
 
-    const [history, total] = await Promise.all([
-      prisma.stockHistory.findMany({
-        where: { productId: parseInt(productId) },
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.stockHistory.count({ where: { productId: parseInt(productId) } }),
-    ]);
+/**
+ * Update stock with transaction history
+ * @route POST /api/inventory/update-stock
+ * @param {number} productId - Product ID
+ * @param {string} type - "in" or "out"
+ * @param {number} quantity - Quantity to add/reduce
+ * @param {string} description - Transaction description (optional)
+ * @returns {Object} { success, message, data }
+ */
+exports.updateStock = asyncHandler(async (req, res) => {
+  const { productId, type, quantity, description } = req.body;
 
-    res.status(200).json({
-      success: true,
-      message: "Riwayat stock berhasil diambil",
-      data: history,
-      pagination: getPaginationMeta(total, page, limit),
-    });
-  } catch (err) {
-    console.error("Get stock history error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  // Validate input using shared validate
+  const value = await validate(updateStockSchema, {
+    type,
+    quantity,
+    description,
+  });
+
+  if (!productId) {
+    return sendBadRequest(res, "productId wajib diisi");
   }
-};
 
-// ========================================
-// UPDATE INVENTORY SETTINGS
-// ========================================
-exports.updateInventorySettings = async (req, res) => {
-  try {
-    const { productId } = req.params;
-    const { minStock, maxStock, warehouseLocation } = req.body;
+  // Get current inventory
+  const inventory = await prisma.inventory.findUnique({
+    where: { productId: parseInt(productId) },
+  });
 
-    // Check inventory exists
-    const inventory = await prisma.inventory.findUnique({
-      where: { productId: parseInt(productId) },
-    });
+  if (!inventory) {
+    return sendNotFound(res, "Inventory tidak ditemukan");
+  }
 
-    if (!inventory) {
-      return res.status(404).json({
-        success: false,
-        message: "Inventory tidak ditemukan",
-      });
+  // Calculate new stock
+  let newStock = inventory.stock;
+  if (value.type === "in") {
+    newStock += parseInt(value.quantity);
+  } else if (value.type === "out") {
+    newStock -= parseInt(value.quantity);
+
+    if (newStock < 0) {
+      return sendBadRequest(
+        res,
+        `Stock tidak mencukupi. Stok saat ini: ${inventory.stock}`
+      );
     }
-
-    // Prepare update data
-    const updateData = {};
-    if (minStock !== undefined) updateData.minStock = parseInt(minStock);
-    if (maxStock !== undefined) updateData.maxStock = parseInt(maxStock);
-    if (warehouseLocation !== undefined)
-      updateData.warehouseLocation = warehouseLocation;
-
-    // Update
-    const updated = await prisma.inventory.update({
-      where: { productId: parseInt(productId) },
-      data: updateData,
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Pengaturan inventory berhasil diperbarui",
-      data: updated,
-    });
-  } catch (err) {
-    console.error("Update inventory settings error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
   }
-};
+
+  // Update inventory  
+  const updated = await prisma.inventory.update({
+    where: { productId: parseInt(productId) },
+    data: {
+      stock: newStock,
+      lastRestockDate:
+        value.type === "in" ? new Date() : inventory.lastRestockDate,
+      lastRestockQty:
+        value.type === "in" ? parseInt(value.quantity) : inventory.lastRestockQty,
+    },
+  });
+
+  // Create stock history
+  await prisma.stockHistory.create({
+    data: {
+      productId: parseInt(productId),
+      type: value.type,
+      quantity: parseInt(value.quantity),
+      description: value.description,
+      createdBy: req.user.id,
+    },
+  });
+
+  return sendSuccess(res, updated, "Stock berhasil diperbarui");
+});
+
+/**
+ * Get stock history for a product
+ * @route GET /api/inventory/history/:productId
+ * @param {number} productId - Product ID
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Items per page (default: 10)
+ * @returns {Object} { success, message, data, pagination }
+ */
+exports.getStockHistory = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { page, limit, skip } = getPaginationParams(req.query);
+
+  const [history, total] = await Promise.all([
+    prisma.stockHistory.findMany({
+      where: { productId: parseInt(productId) },
+      skip,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.stockHistory.count({ where: { productId: parseInt(productId) } }),
+  ]);
+
+  return sendSuccess(res, {
+    data: history,
+    pagination: buildPaginatedResponse(total, page, limit),
+  }, "Riwayat stock berhasil diambil");
+});
+
+/**
+ * Update inventory settings (minStock, maxStock, location)
+ * @route PUT /api/inventory/:productId/settings
+ * @param {number} productId - Product ID
+ * @param {number} minStock - Minimum stock level (optional)
+ * @param {number} maxStock - Maximum stock level (optional)
+ * @param {string} warehouseLocation - Warehouse location (optional)
+ * @returns {Object} { success, message, data }
+ */
+exports.updateInventorySettings = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { minStock, maxStock, warehouseLocation } = req.body;
+
+  // Check inventory exists
+  const inventory = await prisma.inventory.findUnique({
+    where: { productId: parseInt(productId) },
+  });
+
+  if (!inventory) {
+    return sendNotFound(res, "Inventory tidak ditemukan");
+  }
+
+  // Prepare update data
+  const updateData = {};
+  if (minStock !== undefined) updateData.minStock = parseInt(minStock);
+  if (maxStock !== undefined) updateData.maxStock = parseInt(maxStock);
+  if (warehouseLocation !== undefined)
+    updateData.warehouseLocation = warehouseLocation;
+
+  // Update
+  const updated = await prisma.inventory.update({
+    where: { productId: parseInt(productId) },
+    data: updateData,
+  });
+
+  return sendSuccess(res, updated, "Pengaturan inventory berhasil diperbarui");
+});

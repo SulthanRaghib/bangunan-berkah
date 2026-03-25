@@ -1,292 +1,167 @@
 const prisma = require("../config/prisma");
 const {
-  validateCreateProduct,
-  validateUpdateProduct,
+  createProductSchema,
+  updateProductSchema,
 } = require("../utils/validation");
 const {
+  asyncHandler,
+  validate,
+  sendSuccess,
+  sendBadRequest,
+  sendNotFound,
   getPaginationParams,
-  getPaginationMeta,
-} = require("../utils/pagination");
+  buildPaginatedResponse,
+} = require("../../../shared");
 const { getImageUrl, deleteImage } = require("../utils/imageHandler");
 
-// ========================================
-// CREATE PRODUCT
-// ========================================
-exports.createProduct = async (req, res) => {
-  try {
-    const {
+/**
+ * Create product
+ * @route POST /api/products
+ * @param {string} name - Product name
+ * @param {string} sku - Product SKU
+ * @param {number} price - Product price
+ * @param {number} categoryId - Category ID
+ * @param {string} description - Product description (optional)
+ * @param {number} salePrice - Sale price (optional)
+ * @returns {Object} { success, message, data }
+ */
+exports.createProduct = asyncHandler(async (req, res) => {
+  // Validate input using shared validate
+  const value = await validate(createProductSchema, req.body);
+  const {
+    name,
+    description,
+    sku,
+    price,
+    salePrice,
+    categoryId,
+    unit,
+    weight,
+    dimensions,
+    tags,
+    isFeatured,
+    stock,
+    minStock,
+  } = value;
+
+  // Generate slug
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+  // Check slug exists
+  const existingSlug = await prisma.product.findUnique({ where: { slug } });
+  if (existingSlug) {
+    return sendBadRequest(res, "Produk dengan nama tersebut sudah ada");
+  }
+
+  // Check SKU exists
+  const existingSku = await prisma.product.findUnique({ where: { sku } });
+  if (existingSku) {
+    return sendBadRequest(res, "SKU sudah digunakan");
+  }
+
+  // Handle image uploads
+  const images = req.files ? req.files.map((file) => file.filename) : [];
+
+  // Create product with inventory
+  const product = await prisma.product.create({
+    data: {
       name,
+      slug,
       description,
       sku,
-      price,
-      salePrice,
+      price: parseFloat(price),
+      salePrice: salePrice ? parseFloat(salePrice) : null,
       categoryId,
-      unit,
-      weight,
+      unit: unit || "pcs",
+      weight: weight ? parseFloat(weight) : null,
       dimensions,
+      images: images.length > 0 ? images : undefined,
       tags,
-      isFeatured,
-      stock,
-      minStock,
-    } = req.body;
+      isFeatured: isFeatured === "true" || isFeatured === true,
+      createdBy: req.user.id,
+    },
+    include: {
+      category: true,
+    },
+  });
 
-    // Validation
-    const { error } = validateCreateProduct(req.body);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.details[0].message,
-      });
-    }
+  // Create inventory separately
+  await prisma.inventory.create({
+    data: {
+      productId: product.id,
+      stock: stock ? parseInt(stock) : 0,
+      minStock: minStock ? parseInt(minStock) : 10,
+    },
+  });
 
-    // Generate slug
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
-    // Check slug exists
-    const existingSlug = await prisma.product.findUnique({ where: { slug } });
-    if (existingSlug) {
-      return res.status(400).json({
-        success: false,
-        message: "Produk dengan nama tersebut sudah ada",
-      });
-    }
-
-    // Check SKU exists
-    const existingSku = await prisma.product.findUnique({ where: { sku } });
-    if (existingSku) {
-      return res.status(400).json({
-        success: false,
-        message: "SKU sudah digunakan",
-      });
-    }
-
-    // Handle image uploads
-    const images = req.files ? req.files.map((file) => file.filename) : [];
-
-    // Use Prisma's create method instead of transaction (simplified approach)
-    // Note: If you need true atomicity, configure MongoDB replica set
-    const product = await prisma.product.create({
-      data: {
-        name,
-        slug,
-        description,
-        sku,
-        price: parseFloat(price),
-        salePrice: salePrice ? parseFloat(salePrice) : null,
-        categoryId: categoryId,
-        unit: unit || "pcs",
-        weight: weight ? parseFloat(weight) : null,
-        dimensions,
-        images: images.length > 0 ? images : undefined,
-        tags,
-        isFeatured: isFeatured === "true" || isFeatured === true,
-        createdBy: req.user.id,
-      },
-      include: {
-        category: true,
-      },
-    });
-
-    // Create inventory separately
-    await prisma.inventory.create({
+  // Create stock history if stock > 0
+  if (stock && parseInt(stock) > 0) {
+    await prisma.stockHistory.create({
       data: {
         productId: product.id,
-        stock: stock ? parseInt(stock) : 0,
-        minStock: minStock ? parseInt(minStock) : 10,
+        type: "in",
+        quantity: parseInt(stock),
+        description: "Initial stock",
+        createdBy: req.user.id,
       },
     });
-
-    // Create stock history if stock > 0
-    if (stock && parseInt(stock) > 0) {
-      await prisma.stockHistory.create({
-        data: {
-          productId: product.id,
-          type: "in",
-          quantity: parseInt(stock),
-          description: "Initial stock",
-          createdBy: req.user.id,
-        },
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: "Produk berhasil dibuat",
-      data: product,
-    });
-  } catch (err) {
-    console.error("Create product error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
   }
-};
 
-// ========================================
-// GET ALL PRODUCTS
-// ========================================
-exports.getAllProducts = async (req, res) => {
-  try {
-    const { page, limit, skip } = getPaginationParams(req.query);
-    const { search, categoryId, minPrice, maxPrice, isFeatured, isActive } =
-      req.query;
+  return sendSuccess(res, product, "Produk berhasil dibuat", 201);
+});
 
-    // Build where clause
-    const where = {};
+/**
+ * Get all products with filters and pagination
+ * @route GET /api/products
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Items per page (default: 10)
+ * @param {string} search - Search term (optional)
+ * @param {number} categoryId - Filter by category (optional)
+ * @param {number} minPrice - Minimum price (optional)
+ * @param {number} maxPrice - Maximum price (optional)
+ * @param {boolean} isFeatured - Filter by featured (optional)
+ * @param {boolean} isActive - Filter by active (optional)
+ * @returns {Object} { success, message, data, pagination }
+ */
+exports.getAllProducts = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search, categoryId, minPrice, maxPrice, isFeatured, isActive } =
+    req.query;
 
-    if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
-        { sku: { contains: search } },
-        { tags: { contains: search } },
-      ];
-    }
+  // Build where clause
+  const where = {};
 
-    if (categoryId) {
-      where.categoryId = parseInt(categoryId);
-    }
-
-    if (minPrice || maxPrice) {
-      where.price = {};
-      if (minPrice) where.price.gte = parseFloat(minPrice);
-      if (maxPrice) where.price.lte = parseFloat(maxPrice);
-    }
-
-    if (isFeatured !== undefined) {
-      where.isFeatured = isFeatured === "true";
-    }
-
-    if (isActive !== undefined) {
-      where.isActive = isActive === "true";
-    }
-
-    // Get products
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
-          },
-          inventory: {
-            select: {
-              stock: true,
-              minStock: true,
-            },
-          },
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.product.count({ where }),
-    ]);
-
-    res.status(200).json({
-      success: true,
-      message: "Produk berhasil diambil",
-      data: products,
-      pagination: getPaginationMeta(total, page, limit),
-    });
-  } catch (err) {
-    console.error("Get products error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (search) {
+    where.OR = [
+      { name: { contains: search } },
+      { description: { contains: search } },
+      { sku: { contains: search } },
+      { tags: { contains: search } },
+    ];
   }
-};
 
-// ========================================
-// GET PRODUCT BY ID
-// ========================================
-exports.getProductById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        category: true,
-        inventory: true,
-      },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Produk berhasil diambil",
-      data: product,
-    });
-  } catch (err) {
-    console.error("Get product error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (categoryId) {
+    where.categoryId = parseInt(categoryId);
   }
-};
 
-// ========================================
-// GET PRODUCT BY SLUG
-// ========================================
-exports.getProductBySlug = async (req, res) => {
-  try {
-    const { slug } = req.params;
-
-    const product = await prisma.product.findUnique({
-      where: { slug },
-      include: {
-        category: true,
-        inventory: true,
-      },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Produk berhasil diambil",
-      data: product,
-    });
-  } catch (err) {
-    console.error("Get product by slug error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (minPrice || maxPrice) {
+    where.price = {};
+    if (minPrice) where.price.gte = parseFloat(minPrice);
+    if (maxPrice) where.price.lte = parseFloat(maxPrice);
   }
-};
 
-// ========================================
-// GET FEATURED PRODUCTS
-// ========================================
-exports.getFeaturedProducts = async (req, res) => {
-  try {
-    const { limit = 10 } = req.query;
+  if (isFeatured !== undefined) {
+    where.isFeatured = isFeatured === "true";
+  }
 
-    const products = await prisma.product.findMany({
-      where: {
-        isFeatured: true,
-        isActive: true,
-      },
+  if (isActive !== undefined) {
+    where.isActive = isActive === "true";
+  }
+
+  // Get products
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
       include: {
         category: {
           select: {
@@ -298,234 +173,251 @@ exports.getFeaturedProducts = async (req, res) => {
         inventory: {
           select: {
             stock: true,
+            minStock: true,
           },
         },
       },
-      take: parseInt(limit),
+      skip,
+      take: limit,
       orderBy: { createdAt: "desc" },
-    });
+    }),
+    prisma.product.count({ where }),
+  ]);
 
-    res.status(200).json({
-      success: true,
-      message: "Produk featured berhasil diambil",
-      data: products,
-    });
-  } catch (err) {
-    console.error("Get featured products error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  return sendSuccess(res, {
+    data: products,
+    pagination: buildPaginatedResponse(total, page, limit),
+  }, "Produk berhasil diambil");
+});
+
+/**
+ * Get product by ID
+ * @route GET /api/products/:id
+ * @param {number} id - Product ID
+ * @returns {Object} { success, message, data }
+ */
+exports.getProductById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const product = await prisma.product.findUnique({
+    where: { id: parseInt(id) },
+    include: {
+      category: true,
+      inventory: true,
+    },
+  });
+
+  if (!product) {
+    return sendNotFound(res, "Produk tidak ditemukan");
   }
-};
 
-// ========================================
-// UPDATE PRODUCT
-// ========================================
-exports.updateProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
+  return sendSuccess(res, product, "Produk berhasil diambil");
+});
 
-    // Validation
-    const { error } = validateUpdateProduct(updateData);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.details[0].message,
-      });
-    }
+/**
+ * Get product by slug
+ * @route GET /api/products/slug/:slug
+ * @param {string} slug - Product slug
+ * @returns {Object} { success, message, data }
+ */
+exports.getProductBySlug = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
 
-    // Check exists
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
+  const product = await prisma.product.findUnique({
+    where: { slug },
+    include: {
+      category: true,
+      inventory: true,
+    },
+  });
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
+  if (!product) {
+    return sendNotFound(res, "Produk tidak ditemukan");
+  }
 
-    // Prepare update data
-    const data = {};
+  return sendSuccess(res, product, "Produk berhasil diambil");
+});
 
-    if (updateData.name) {
-      data.name = updateData.name;
-      data.slug = updateData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    }
+/**
+ * Get featured products
+ * @route GET /api/products/featured/list
+ * @param {number} limit - Limit results (default: 10)
+ * @returns {Object} { success, message, data }
+ */
+exports.getFeaturedProducts = asyncHandler(async (req, res) => {
+  const { limit = 10 } = req.query;
 
-    if (updateData.description !== undefined)
-      data.description = updateData.description;
-    if (updateData.sku) data.sku = updateData.sku;
-    if (updateData.price) data.price = parseFloat(updateData.price);
-    if (updateData.salePrice !== undefined)
-      data.salePrice = updateData.salePrice
-        ? parseFloat(updateData.salePrice)
-        : null;
-    if (updateData.categoryId)
-      data.categoryId = parseInt(updateData.categoryId);
-    if (updateData.unit) data.unit = updateData.unit;
-    if (updateData.weight !== undefined)
-      data.weight = updateData.weight ? parseFloat(updateData.weight) : null;
-    if (updateData.dimensions !== undefined)
-      data.dimensions = updateData.dimensions;
-    if (updateData.tags !== undefined) data.tags = updateData.tags;
-    if (updateData.isActive !== undefined)
-      data.isActive =
-        updateData.isActive === "true" || updateData.isActive === true;
-    if (updateData.isFeatured !== undefined)
-      data.isFeatured =
-        updateData.isFeatured === "true" || updateData.isFeatured === true;
-
-    // Handle new images
-    if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => file.filename);
-      const existingImages = product.images || [];
-      data.images = [...existingImages, ...newImages];
-    }
-
-    // Update product
-    const updated = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data,
-      include: {
-        category: true,
-        inventory: true,
+  const products = await prisma.product.findMany({
+    where: {
+      isFeatured: true,
+      isActive: true,
+    },
+    include: {
+      category: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
       },
-    });
+      inventory: {
+        select: {
+          stock: true,
+        },
+      },
+    },
+    take: parseInt(limit),
+    orderBy: { createdAt: "desc" },
+  });
 
-    res.status(200).json({
-      success: true,
-      message: "Produk berhasil diperbarui",
-      data: updated,
-    });
-  } catch (err) {
-    console.error("Update product error:", err);
-    res.status(500).json({
-      success: false,
-      message:
-        "Terjadi kesalahan server, mohon periksa kembali data yang dikirimkan",
-    });
+  return sendSuccess(res, products, "Produk featured berhasil diambil");
+});
+
+/**
+ * Update product
+ * @route PUT /api/products/:id
+ * @param {number} id - Product ID
+ * @returns {Object} { success, message, data }
+ */
+exports.updateProduct = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+
+  // Validate input using shared validate
+  const value = await validate(updateProductSchema, updateData);
+
+  // Check product exists
+  const product = await prisma.product.findUnique({
+    where: { id: parseInt(id) },
+  });
+
+  if (!product) {
+    return sendNotFound(res, "Produk tidak ditemukan");
   }
-};
 
-// ========================================
-// DELETE PRODUCT
-// ========================================
-exports.deleteProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
+  // Prepare update data
+  const data = {};
 
-    // Check exists
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
-
-    // Delete images
-    if (product.images && product.images.length > 0) {
-      for (const image of product.images) {
-        await deleteImage(image);
-      }
-    }
-
-    // Delete product (cascade delete inventory & stock history)
-    await prisma.product.delete({
-      where: { id: parseInt(id) },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Produk berhasil dihapus",
-    });
-  } catch (err) {
-    console.error("Delete product error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (value.name) {
+    data.name = value.name;
+    data.slug = value.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   }
-};
 
-// ========================================
-// TOGGLE FEATURED
-// ========================================
-exports.toggleFeatured = async (req, res) => {
-  try {
-    const { id } = req.params;
+  if (value.description !== undefined) data.description = value.description;
+  if (value.sku) data.sku = value.sku;
+  if (value.price) data.price = parseFloat(value.price);
+  if (value.salePrice !== undefined)
+    data.salePrice = value.salePrice ? parseFloat(value.salePrice) : null;
+  if (value.categoryId) data.categoryId = parseInt(value.categoryId);
+  if (value.unit) data.unit = value.unit;
+  if (value.weight !== undefined)
+    data.weight = value.weight ? parseFloat(value.weight) : null;
+  if (value.dimensions !== undefined) data.dimensions = value.dimensions;
+  if (value.tags !== undefined) data.tags = value.tags;
+  if (value.isActive !== undefined)
+    data.isActive = value.isActive === "true" || value.isActive === true;
+  if (value.isFeatured !== undefined)
+    data.isFeatured = value.isFeatured === "true" || value.isFeatured === true;
 
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
-
-    const updated = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data: { isFeatured: !product.isFeatured },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: `Produk ${updated.isFeatured ? "ditandai" : "dihapus"
-        } sebagai featured`,
-      data: updated,
-    });
-  } catch (err) {
-    console.error("Toggle featured error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  // Handle new images
+  if (req.files && req.files.length > 0) {
+    const newImages = req.files.map((file) => file.filename);
+    const existingImages = product.images || [];
+    data.images = [...existingImages, ...newImages];
   }
-};
 
-// ========================================
-// TOGGLE ACTIVE
-// ========================================
-exports.toggleActive = async (req, res) => {
-  try {
-    const { id } = req.params;
+  // Update product
+  const updated = await prisma.product.update({
+    where: { id: parseInt(id) },
+    data,
+    include: {
+      category: true,
+      inventory: true,
+    },
+  });
 
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
+  return sendSuccess(res, updated, "Produk berhasil diperbarui");
+});
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
+/**
+ * Delete product
+ * @route DELETE /api/products/:id
+ * @param {number} id - Product ID
+ * @returns {Object} { success, message }
+ */
+exports.deleteProduct = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-    const updated = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data: { isActive: !product.isActive },
-    });
+  // Check product exists
+  const product = await prisma.product.findUnique({
+    where: { id: parseInt(id) },
+  });
 
-    res.status(200).json({
-      success: true,
-      message: `Produk ${updated.isActive ? "diaktifkan" : "dinonaktifkan"}`,
-      data: updated,
-    });
-  } catch (err) {
-    console.error("Toggle active error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+  if (!product) {
+    return sendNotFound(res, "Produk tidak ditemukan");
   }
-};
+
+  // Delete images
+  if (product.images && product.images.length > 0) {
+    for (const image of product.images) {
+      await deleteImage(image);
+    }
+  }
+
+  // Delete product (cascade delete inventory & stock history)
+  await prisma.product.delete({
+    where: { id: parseInt(id) },
+  });
+
+  return sendSuccess(res, {}, "Produk berhasil dihapus");
+});
+
+/**
+ * Toggle featured status
+ * @route PATCH /api/products/:id/toggle-featured
+ * @param {number} id - Product ID
+ * @returns {Object} { success, message, data }
+ */
+exports.toggleFeatured = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const product = await prisma.product.findUnique({
+    where: { id: parseInt(id) },
+  });
+
+  if (!product) {
+    return sendNotFound(res, "Produk tidak ditemukan");
+  }
+
+  const updated = await prisma.product.update({
+    where: { id: parseInt(id) },
+    data: { isFeatured: !product.isFeatured },
+  });
+
+  return sendSuccess(res, updated, `Produk ${updated.isFeatured ? "ditandai" : "dihapus"} sebagai featured`);
+});
+
+/**
+ * Toggle active status
+ * @route PATCH /api/products/:id/toggle-active
+ * @param {number} id - Product ID
+ * @returns {Object} { success, message, data }
+ */
+exports.toggleActive = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const product = await prisma.product.findUnique({
+    where: { id: parseInt(id) },
+  });
+
+  if (!product) {
+    return sendNotFound(res, "Produk tidak ditemukan");
+  }
+
+  const updated = await prisma.product.update({
+    where: { id: parseInt(id) },
+    data: { isActive: !product.isActive },
+  });
+
+  return sendSuccess(res, updated, `Produk ${updated.isActive ? "diaktifkan" : "dinonaktifkan"}`);
+});
