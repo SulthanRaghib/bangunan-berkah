@@ -4,6 +4,8 @@ const cors = require("cors");
 const morgan = require("morgan");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
+const { RedisStore } = require("rate-limit-redis");
+const { createClient } = require("redis");
 const swaggerUi = require("swagger-ui-express");
 
 dotenv.config();
@@ -17,19 +19,69 @@ const SERVICE_NAME = process.env.SERVICE_NAME || "API Gateway";
 // ========================================
 app.use(cors());
 app.use(morgan("dev"));
+app.set("trust proxy", 1);
 
-// Rate Limiter (100 requests per 15 minutes)
+// Distributed Rate Limiter via Redis
+const redisClient = createClient({
+  socket: {
+    host: process.env.REDIS_HOST || "redis",
+    port: Number(process.env.REDIS_PORT || 6379),
+    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT || 5000),
+  },
+  password: process.env.REDIS_PASSWORD || undefined,
+  database: Number(process.env.REDIS_DB || 0),
+});
+
+redisClient.on("error", (error) => {
+  console.error("Redis Gateway Error:", error.message);
+});
+
+redisClient.connect().catch((error) => {
+  console.error("Gagal koneksi Redis di API Gateway:", error.message);
+});
+
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_MAX || 100),
   message: {
     success: false,
-    message: "Too many requests from this IP, please try again later.",
+    message: "Terlalu banyak permintaan. Silakan coba lagi nanti.",
   },
   standardHeaders: true,
   legacyHeaders: false,
+  passOnStoreError: true,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.sendCommand(args),
+    prefix: "rl:api-gateway:",
+  }),
+  skip: (req) =>
+    req.path.startsWith("/health") ||
+    req.path.startsWith("/docs") ||
+    req.path.startsWith("/api/auth/login") ||
+    req.path.startsWith("/api/auth/refresh") ||
+    req.path.startsWith("/api/auth/register"),
 });
-app.use(limiter);
+
+const strictAuthLimiter = rateLimit({
+  windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
+  message: {
+    success: false,
+    message: "Terlalu banyak percobaan autentikasi. Silakan coba lagi nanti.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  passOnStoreError: false,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.sendCommand(args),
+    prefix: "rl:api-gateway:auth:",
+  }),
+});
+
+app.use("/api/auth/login", strictAuthLimiter);
+app.use("/api/auth/refresh", strictAuthLimiter);
+app.use("/api/auth/register", strictAuthLimiter);
+app.use("/api", limiter);
 
 // ========================================
 // SERVICE URLS
