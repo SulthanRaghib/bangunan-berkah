@@ -100,7 +100,10 @@
 - 🔀 Single entry point untuk semua layanan
 - ⚡ Rate limiting & DDoS protection
 - 📊 Request routing & load balancing
-- 🌐 CORS support
+- 🛡️ HTTP security headers (Helmet)
+- 🌐 CORS whitelist berbasis `FRONTEND_URL`
+- 🔐 Centralized JWT verification di Gateway
+- 🧾 Custom header forwarding (`x-user-id`, `x-user-email`, `x-user-role`)
 - 📝 Comprehensive logging & monitoring
 
 ---
@@ -136,7 +139,7 @@
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │         🚪 API GATEWAY (Port 8080) - Single Entry Point         │
-│   Rate Limiting • Request Routing • CORS • Logging & Monitoring │
+│ Rate Limiting • CORS Whitelist • Helmet • JWT Verify • Routing  │
 └────────┬───────────────┬──────────────┬──────────────┬──────────┘
          │               │              │              │
          ▼               ▼              ▼              ▼
@@ -863,6 +866,23 @@ Response 200:
 ---
 
 ## 🔐 Keamanan & Autentikasi
+
+### Pembaruan Keamanan Gateway (Tahap 2)
+
+- API Gateway kini menerapkan `helmet()` untuk hardening HTTP headers.
+- CORS tidak lagi terbuka; origin dibatasi melalui `FRONTEND_URL`.
+- Verifikasi JWT dipusatkan di API Gateway sebelum request diproxy ke service lain.
+- Setelah token valid, gateway meneruskan identitas user ke downstream lewat header:
+  - `x-user-id`
+  - `x-user-email`
+  - `x-user-role`
+- Downstream middleware membaca header di atas untuk mengisi `req.user` (kompatibel dengan controller lama).
+
+### Catatan CORS
+
+- Jika `FRONTEND_URL` tidak di-set, gateway memakai fallback `http://localhost:3000`.
+- Request browser dari origin lain tidak akan lolos kebijakan CORS.
+- Testing backend via Postman/cURL/server-to-server tetap bisa karena tidak dibatasi oleh CORS browser policy.
 
 ### JWT Authentication Flow
 
