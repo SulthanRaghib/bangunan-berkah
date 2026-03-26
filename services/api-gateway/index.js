@@ -1,12 +1,14 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const helmet = require("helmet");
 const morgan = require("morgan");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
 const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const swaggerUi = require("swagger-ui-express");
+const { gatewayAuthMiddleware } = require("./middleware/gatewayAuth.middleware");
 
 dotenv.config();
 
@@ -15,9 +17,20 @@ const PORT = process.env.PORT || 8080;
 const SERVICE_NAME = process.env.SERVICE_NAME || "API Gateway";
 
 // ========================================
-// MIDDLEWARE
+// SECURITY HEADERS & MIDDLEWARE
 // ========================================
-app.use(cors());
+// Helmet: Set HTTP security headers (XSS, CSP, HSTS, Clickjacking, etc.)
+app.use(helmet());
+
+// CORS: Improved configuration
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  maxAge: 86400, // 24 hours
+};
+app.use(cors(corsOptions));
 app.use(morgan("dev"));
 app.set("trust proxy", 1);
 
@@ -84,6 +97,12 @@ app.use("/api/auth/register", strictAuthLimiter);
 app.use("/api", limiter);
 
 // ========================================
+// CENTRALIZED JWT AUTHENTICATION (API GATEWAY)
+// ========================================
+// Verify JWT once at gateway, inject user info via custom headers
+app.use(gatewayAuthMiddleware);
+
+// ========================================
 // SERVICE URLS
 // ========================================
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://auth-service:8001";
@@ -103,13 +122,26 @@ const createProxy = (pathFilter, target) => {
     changeOrigin: true,
     pathFilter, // v3 uses pathFilter instead of context
     onProxyReq: (proxyReq, req, res) => {
-      // Optional: Add custom headers or logging
+      // Forward custom headers (user info from centralized auth)
+      // to downstream services
+      if (req.headers["x-user-id"]) {
+        proxyReq.setHeader("x-user-id", req.headers["x-user-id"]);
+      }
+      if (req.headers["x-user-email"]) {
+        proxyReq.setHeader("x-user-email", req.headers["x-user-email"]);
+      }
+      if (req.headers["x-user-role"]) {
+        proxyReq.setHeader("x-user-role", req.headers["x-user-role"]);
+      }
+      if (req.headers["x-user-token"]) {
+        proxyReq.setHeader("x-user-token", req.headers["x-user-token"]);
+      }
     },
     onError: (err, req, res) => {
       console.error("Proxy Error:", err);
-      res.status(500).json({
+      res.status(503).json({
         success: false,
-        message: "Service unavailable",
+        message: "Service unavailable. Please try again later.",
       });
     },
   });
