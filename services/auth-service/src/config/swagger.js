@@ -119,8 +119,8 @@ Authorization: Bearer {accessToken}
         },
         servers: [
             {
-                url: "http://localhost:8001",
-                description: "Development server",
+                url: "/",
+                description: "Current origin (gateway atau direct service)",
             },
         ],
         components: {

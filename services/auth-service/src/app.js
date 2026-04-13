@@ -34,6 +34,17 @@ dotenv.config();
 
 const app = express();
 
+const parseAllowedOrigins = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 /**
  * ============================================
  * MIDDLEWARE CONFIGURATION
@@ -45,7 +56,30 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // CORS
-app.use(cors());
+const allowedOrigins = parseAllowedOrigins(
+  process.env.CORS_ALLOWED_ORIGINS ||
+  "http://localhost:3000,http://localhost:8080,http://localhost:8001"
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow non-browser clients (curl, Postman, server-to-server)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 /**
  * ============================================
