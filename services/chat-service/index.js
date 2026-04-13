@@ -6,7 +6,41 @@ const morgan = require("morgan");
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+const parseAllowedOrigins = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const allowedOrigins = parseAllowedOrigins(
+  process.env.CORS_ALLOWED_ORIGINS ||
+  "http://localhost:3000,http://localhost:8080,http://localhost:8003"
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 app.use(morgan("dev"));
 
