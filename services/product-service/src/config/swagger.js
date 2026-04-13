@@ -80,8 +80,8 @@ const options = {
         },
         servers: [
             {
-                url: "http://localhost:8002",
-                description: "Development server",
+                url: "/",
+                description: "Current origin (gateway atau direct service)",
             },
         ],
         components: {
