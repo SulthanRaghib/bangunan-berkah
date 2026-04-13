@@ -176,8 +176,8 @@ services/project-service/uploads/
         },
         servers: [
             {
-                url: "http://localhost:8004",
-                description: "Development server",
+                url: "/",
+                description: "Current origin (gateway atau direct service)",
             },
         ],
         components: {
