@@ -16,17 +16,42 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const SERVICE_NAME = process.env.SERVICE_NAME || "API Gateway";
 
+const parseAllowedOrigins = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 // ========================================
 // SECURITY HEADERS & MIDDLEWARE
 // ========================================
 // Helmet: Set HTTP security headers (XSS, CSP, HSTS, Clickjacking, etc.)
 app.use(helmet());
 
+const configuredCorsOrigins =
+  process.env.CORS_ALLOWED_ORIGINS || process.env.FRONTEND_URL || "http://localhost:3000";
+const allowedOrigins = parseAllowedOrigins(configuredCorsOrigins);
+
 // CORS: Improved configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("Origin not allowed by CORS"));
+  },
   credentials: true,
-  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400, // 24 hours
 };
