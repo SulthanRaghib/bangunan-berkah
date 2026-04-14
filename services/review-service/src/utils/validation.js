@@ -87,11 +87,10 @@ const testimonialSchema = Joi.object({
     position: Joi.string().optional().max(100).messages({
         "string.max": "Posisi maksimal 100 karakter",
     }),
-    testimonialText: Joi.string().required().min(10).max(5000).messages({
+    testimonialText: Joi.string().min(10).max(5000).messages({
         "string.empty": "Testimoni tidak boleh kosong",
         "string.min": "Testimoni minimal 10 karakter",
         "string.max": "Testimoni maksimal 5000 karakter",
-        "any.required": "Testimoni wajib diisi",
     }),
     rating: Joi.number().integer().min(1).max(5).required().messages({
         "number.base": "Rating harus berupa angka",
@@ -103,6 +102,8 @@ const testimonialSchema = Joi.object({
     photos: Joi.array().items(Joi.string()).optional().messages({
         "array.base": "Foto harus berupa array",
     }),
+}).required().messages({
+    "any.required": "Body testimoni wajib diisi",
 });
 
 // Export only schemas - validation logic is handled by shared validate utility

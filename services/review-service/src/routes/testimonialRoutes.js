@@ -22,7 +22,7 @@ const { authMiddleware, roleMiddleware } = require("../../../../shared");
  *             required:
  *               - name
  *               - email
- *               - message
+ *               - testimonialText
  *               - rating
  *             properties:
  *               name:
@@ -42,7 +42,7 @@ const { authMiddleware, roleMiddleware } = require("../../../../shared");
  *                 type: string
  *                 example: Project Manager
  *                 description: Jabatan atau posisi pemberi testimoni (opsional)
- *               message:
+ *               testimonialText:
  *                 type: string
  *                 example: Layanan sangat profesional dan tepat waktu
  *                 description: Isi testimoni - pengalaman dan kesan tentang layanan perusahaan
@@ -206,7 +206,7 @@ router.get("/admin/:id", authMiddleware, roleMiddleware(["admin"]), testimonialC
  *                 type: boolean
  *                 example: true
  *                 description: Status approval - true untuk publikasikan, false untuk tolak/draft
- *               message:
+ *               testimonialText:
  *                 type: string
  *                 example: "Testimoni yang sudah diedit untuk grammar dan clarity"
  *                 description: Isi testimoni yang sudah diedit (opsional, hanya jika perlu perbaikan)

@@ -185,7 +185,7 @@ app.use(createProxy("/api/chat", CHAT_SERVICE_URL));
 app.use(createProxy(["/api/projects", "/api/dashboard", "/api/milestones"], PROJECT_SERVICE_URL));
 
 // Review Service
-app.use(createProxy("/api/reviews", REVIEW_SERVICE_URL));
+app.use(createProxy(["/api/reviews", "/api/testimonials", "/api/qa"], REVIEW_SERVICE_URL));
 
 // ========================================
 // SWAGGER UI AGGREGATOR

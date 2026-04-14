@@ -39,6 +39,9 @@ const isProtectedRoute = (path) => {
         "/api/auth/refresh",
         "/api/products", // GET products biasanya publik
         "/api/categories", // GET categories publik
+        "/api/reviews",
+        "/api/testimonials",
+        "/api/qa",
         "/health",
         "/docs",
         "/",
