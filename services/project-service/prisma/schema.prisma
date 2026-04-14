@@ -40,7 +40,7 @@ model Project {
     // Status & Progress
     status String @default("pending") // pending, in_progress, on_hold, completed, cancelled
 
-    progress Float @default(0) // 0-100% (updated via weekly reports)
+    progress Float @default(0) // 0-100% (synced from milestone progress)
 
     // Documentation
     contractDocument String? // URL to contract file
@@ -78,7 +78,7 @@ type Milestone {
 }
 
 // ============================================
-// WEEKLY REPORT (Laporan Mingguan) - Embedded
+// WEEKLY REPORT (Laporan Mingguan) - Legacy/unused
 // ============================================
 type WeeklyReport {
     weekNumber  Int

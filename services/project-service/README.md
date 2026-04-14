@@ -10,7 +10,7 @@
 
 </div>
 
-Project Service adalah service inti untuk lifecycle proyek: project CRUD, milestone, progress report, dokumen, dashboard, dan public tracking.
+Project Service adalah service inti untuk lifecycle proyek: project CRUD, milestone-based progress, dokumen, dashboard, dan public tracking.
 
 ---
 
@@ -18,7 +18,7 @@ Project Service adalah service inti untuk lifecycle proyek: project CRUD, milest
 
 - CRUD proyek dengan kode unik `PRJ-YYYY-XXX`.
 - Milestone management (add/update/delete/list).
-- Weekly progress report dengan upload foto.
+- Progress proyek dihitung dari milestone.
 - Public tracking (`/track/:projectCode`, `/summary/:projectCode`).
 - Dokumen proyek (upload/list/delete).
 - Dashboard statistik dan activity log.
@@ -27,17 +27,11 @@ Project Service adalah service inti untuk lifecycle proyek: project CRUD, milest
 
 ## 🧠 Logika Progress Saat Ini
 
-Sistem saat ini memiliki dua sumber update `project.progress`:
+`project.progress` hanya bersumber dari milestone.
 
-1. **Milestone Flow**
-   - Endpoint: create/update/delete milestone.
-   - Progress dihitung sebagai rata-rata progress milestone.
-
-2. **Weekly Report Flow**
-   - Endpoint: `POST /api/projects/:projectCode/progress`.
-   - Progress di-set langsung dari nilai report.
-
-Gunakan satu sumber sebagai _single source of truth_ jika ingin konsistensi yang ketat.
+- Setiap milestone memiliki field `progress` (0-100).
+- `Project.progress` adalah rata-rata sederhana semua milestone.
+- Setiap add/update/delete milestone akan memicu sinkronisasi ulang progress proyek.
 
 ---
 
@@ -133,7 +127,6 @@ Base URL: `http://localhost:8004`
 - `PUT /api/projects/:projectCode`
 - `DELETE /api/projects/:projectCode`
 - `PATCH /api/projects/:projectCode/status`
-- `POST /api/projects/:projectCode/progress`
 
 ### Milestones (admin)
 
