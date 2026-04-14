@@ -131,6 +131,7 @@ class ProjectRepository extends BaseRepository {
             "startDate",
             "estimatedEndDate",
             "status",
+            "progress",
             "notes",
         ];
 

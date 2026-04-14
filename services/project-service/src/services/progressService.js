@@ -40,40 +40,6 @@ class ProgressService {
     }
 
     /**
-     * Update project progress based on milestones
-     */
-    async updateProjectProgress(projectCode) {
-        try {
-            const project =
-                await projectRepository.findByCodeOptional(projectCode);
-            if (!project) {
-                throw new NotFoundError("Project");
-            }
-
-            const milestones = project.milestones || [];
-            const progress =
-                milestones.length > 0
-                    ? Math.round(
-                        milestones.reduce(
-                            (sum, m) => sum + (m.progress || 0),
-                            0
-                        ) / milestones.length
-                    )
-                    : 0;
-
-            await projectRepository.updateProject(projectCode, {
-                progress,
-            });
-
-            return { progress };
-        } catch (error) {
-            throw error instanceof AppError
-                ? error
-                : new AppError(error.message, 500);
-        }
-    }
-
-    /**
      * Get detailed progress report
      */
     async getProgressReport(projectCode) {

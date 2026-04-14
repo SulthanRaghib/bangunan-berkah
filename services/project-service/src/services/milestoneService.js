@@ -22,6 +22,27 @@ class MilestoneService {
     }
 
     /**
+     * Synchronize stored project progress from milestones
+     */
+    async syncProjectProgress(projectCode) {
+        const project = await projectRepository.findByCodeOptional(projectCode);
+
+        if (!project) {
+            throw new NotFoundError("Project");
+        }
+
+        const newProgress = this.calculateProjectProgress(project.milestones);
+
+        if (newProgress !== project.progress) {
+            await projectRepository.updateProject(projectCode, {
+                progress: newProgress,
+            });
+        }
+
+        return newProgress;
+    }
+
+    /**
      * Add milestone to project
      */
     async addMilestone(projectCode, milestoneData) {
@@ -63,19 +84,7 @@ class MilestoneService {
             // Add to project
             await projectRepository.addMilestone(projectCode, milestone);
 
-            // Recalculate project progress
-            const updatedProject =
-                await projectRepository.findByCodeOptional(projectCode);
-            const newProgress = this.calculateProjectProgress(
-                updatedProject.milestones
-            );
-
-            // Update project progress if changed
-            if (newProgress !== project.progress) {
-                await projectRepository.updateProject(projectCode, {
-                    progress: newProgress,
-                });
-            }
+            const newProgress = await this.syncProjectProgress(projectCode);
 
             return {
                 milestone,
@@ -151,19 +160,7 @@ class MilestoneService {
                 updatedMilestoneData
             );
 
-            // Recalculate project progress
-            const updatedProject =
-                await projectRepository.findByCodeOptional(projectCode);
-            const newProgress = this.calculateProjectProgress(
-                updatedProject.milestones
-            );
-
-            // Update project progress if changed
-            if (newProgress !== project.progress) {
-                await projectRepository.updateProject(projectCode, {
-                    progress: newProgress,
-                });
-            }
+            const newProgress = await this.syncProjectProgress(projectCode);
 
             return {
                 milestone: { id: milestoneId, ...updatedMilestoneData },
@@ -200,19 +197,7 @@ class MilestoneService {
             // Delete milestone
             await projectRepository.deleteMilestone(projectCode, milestoneId);
 
-            // Recalculate project progress
-            const updatedProject =
-                await projectRepository.findByCodeOptional(projectCode);
-            const newProgress = this.calculateProjectProgress(
-                updatedProject.milestones
-            );
-
-            // Update project progress if changed
-            if (newProgress !== project.progress) {
-                await projectRepository.updateProject(projectCode, {
-                    progress: newProgress,
-                });
-            }
+            const newProgress = await this.syncProjectProgress(projectCode);
 
             return {
                 projectProgress: newProgress,

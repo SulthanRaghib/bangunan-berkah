@@ -5,7 +5,6 @@
 
 const progressService = require("../services/progressService");
 const { asyncHandler, sendSuccess } = require("../../../shared");
-const { logProjectActivity } = require("../services/activityLogger");
 
 /**
  * GET MILESTONE PROGRESS
@@ -20,26 +19,6 @@ exports.getMilestoneProgress = asyncHandler(async (req, res) => {
     );
 
     return sendSuccess(res, progress, "Milestone progress berhasil diambil");
-});
-
-/**
- * UPDATE PROJECT PROGRESS
- * PUT /api/projects/:projectCode/progress
- */
-exports.updateProjectProgress = asyncHandler(async (req, res) => {
-    const { projectCode } = req.params;
-
-    const progress = await progressService.updateProjectProgress(projectCode);
-
-    // Log activity
-    await logProjectActivity(projectCode, {
-        userId: req.user.id.toString(),
-        userName: req.user.name || req.user.email,
-        action: "progress_updated",
-        description: `Project progress updated to ${progress.progress}%`,
-    });
-
-    return sendSuccess(res, progress, "Project progress berhasil diperbarui");
 });
 
 /**
