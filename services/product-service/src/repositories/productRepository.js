@@ -1,18 +1,48 @@
-/**
- * ============================================
- * PRODUCT REPOSITORY
- * ============================================
- * Data access layer untuk Product
- */
-
 const prisma = require("../config/prisma");
+const {
+    toObjectIdExt,
+    escapeRegex,
+    findOne,
+    count,
+    aggregate,
+    insertOne,
+    updateOneById,
+    deleteOneById,
+    getRawById,
+} = require("../utils/mongoRaw");
+
+const includeRelationsPipeline = [
+    {
+        $lookup: {
+            from: "categories",
+            localField: "categoryId",
+            foreignField: "_id",
+            as: "category",
+        },
+    },
+    {
+        $unwind: {
+            path: "$category",
+            preserveNullAndEmptyArrays: true,
+        },
+    },
+    {
+        $lookup: {
+            from: "inventories",
+            localField: "_id",
+            foreignField: "productId",
+            as: "inventory",
+        },
+    },
+    {
+        $unwind: {
+            path: "$inventory",
+            preserveNullAndEmptyArrays: true,
+        },
+    },
+];
 
 class ProductRepository {
-    /**
-     * Create product
-     * @param {Object} productData - Product data
-     * @returns {Promise<Object>} Created product
-     */
     async create(productData) {
         try {
             const {
@@ -33,103 +63,97 @@ class ProductRepository {
                 minStock,
             } = productData;
 
-            const product = await prisma.product.create({
-                data: {
+            await insertOne({
+                collection: "products",
+                document: {
                     name,
                     slug,
-                    description,
+                    description: description || null,
                     sku,
                     price: parseFloat(price),
                     salePrice: salePrice ? parseFloat(salePrice) : null,
-                    categoryId: parseInt(categoryId),
+                    categoryId: toObjectIdExt(categoryId),
                     unit: unit || "pcs",
                     weight: weight ? parseFloat(weight) : null,
-                    dimensions,
+                    dimensions: dimensions || null,
                     images: images || [],
-                    tags: tags ? tags.split(",").map((t) => t.trim()) : [],
-                    isFeatured: isFeatured || false,
+                    tags: tags || null,
+                    isFeatured: !!isFeatured,
                     isActive: true,
+                    createdBy: "system",
                     createdAt: new Date(),
                     updatedAt: new Date(),
                 },
-                include: { category: true },
             });
 
-            // Create inventory entry
+            const product = await findOne({
+                collection: "products",
+                filter: { slug },
+                sort: { createdAt: -1 },
+            });
+
             if (stock !== undefined) {
-                await prisma.inventory.create({
-                    data: {
-                        productId: product.id,
-                        stock: parseInt(stock),
-                        minStock: minStock ? parseInt(minStock) : 10,
-                        createdAt: new Date(),
+                await insertOne({
+                    collection: "inventories",
+                    document: {
+                        productId: toObjectIdExt(product.id),
+                        stock: parseInt(stock, 10),
+                        minStock: minStock ? parseInt(minStock, 10) : 10,
+                        maxStock: 1000,
+                        warehouseLocation: null,
                         updatedAt: new Date(),
                     },
                 });
             }
 
-            return product;
+            return await this.findById(product.id);
         } catch (error) {
             throw new Error(`Database error in create: ${error.message}`);
         }
     }
 
-    /**
-     * Find by SKU
-     * @param {string} sku - Product SKU
-     * @returns {Promise<Object|null>}
-     */
     async findBySku(sku) {
         try {
-            return await prisma.product.findUnique({
-                where: { sku },
-                include: { category: true },
+            const rows = await aggregate({
+                collection: "products",
+                pipeline: [{ $match: { sku } }, ...includeRelationsPipeline, { $limit: 1 }],
             });
+            return rows[0] || null;
         } catch (error) {
             throw new Error(`Database error in findBySku: ${error.message}`);
         }
     }
 
-    /**
-     * Find by slug
-     * @param {string} slug - Product slug
-     * @returns {Promise<Object|null>}
-     */
     async findBySlug(slug) {
         try {
-            return await prisma.product.findUnique({
-                where: { slug },
-                include: { category: true },
+            const rows = await aggregate({
+                collection: "products",
+                pipeline: [{ $match: { slug } }, ...includeRelationsPipeline, { $limit: 1 }],
             });
+            return rows[0] || null;
         } catch (error) {
             throw new Error(`Database error in findBySlug: ${error.message}`);
         }
     }
 
-    /**
-     * Find by ID
-     * @param {number|string} id - Product ID
-     * @returns {Promise<Object|null>}
-     */
     async findById(id) {
         try {
-            return await prisma.product.findUnique({
-                where: { id: parseInt(id) },
-                include: {
-                    category: true,
-                    inventory: true,
-                },
+            const rows = await aggregate({
+                collection: "products",
+                pipeline: [
+                    { $addFields: { idString: { $toString: "$_id" } } },
+                    { $match: { idString: String(id) } },
+                    ...includeRelationsPipeline,
+                    { $project: { idString: 0 } },
+                    { $limit: 1 },
+                ],
             });
+            return rows[0] || null;
         } catch (error) {
             throw new Error(`Database error in findById: ${error.message}`);
         }
     }
 
-    /**
-     * Get all products with pagination & filtering
-     * @param {Object} options - { page, limit, search, categoryId, isFeatured, isActive }
-     * @returns {Promise<{products: Array, total: number, page: number, limit: number, totalPages: number}>}
-     */
     async findAll(options = {}) {
         try {
             const {
@@ -142,39 +166,41 @@ class ProductRepository {
             } = options;
 
             const skip = (page - 1) * limit;
+            const match = {};
 
-            // Build where clause
-            const where = {};
             if (search) {
-                where.OR = [
-                    { name: { contains: search, mode: "insensitive" } },
-                    { sku: { contains: search, mode: "insensitive" } },
-                    { description: { contains: search, mode: "insensitive" } },
+                const safe = escapeRegex(search);
+                match.$or = [
+                    { name: { $regex: safe, $options: "i" } },
+                    { sku: { $regex: safe, $options: "i" } },
+                    { description: { $regex: safe, $options: "i" } },
                 ];
             }
+
             if (categoryId) {
-                where.categoryId = parseInt(categoryId);
-            }
-            if (isFeatured !== null) {
-                where.isFeatured = isFeatured === "true" || isFeatured === true;
-            }
-            if (isActive !== null) {
-                where.isActive = isActive === "true" || isActive === true;
+                match.categoryId = toObjectIdExt(categoryId);
             }
 
-            // Get products
+            if (isFeatured !== null) {
+                match.isFeatured = isFeatured === "true" || isFeatured === true;
+            }
+
+            if (isActive !== null) {
+                match.isActive = isActive === "true" || isActive === true;
+            }
+
             const [products, total] = await Promise.all([
-                prisma.product.findMany({
-                    where,
-                    include: {
-                        category: true,
-                        inventory: true,
-                    },
-                    skip,
-                    take: limit,
-                    orderBy: { createdAt: "desc" },
+                aggregate({
+                    collection: "products",
+                    pipeline: [
+                        { $match: match },
+                        ...includeRelationsPipeline,
+                        { $sort: { createdAt: -1 } },
+                        { $skip: skip },
+                        { $limit: parseInt(limit, 10) },
+                    ],
                 }),
-                prisma.product.count({ where }),
+                count({ collection: "products", filter: match }),
             ]);
 
             return {
@@ -189,12 +215,6 @@ class ProductRepository {
         }
     }
 
-    /**
-     * Update product
-     * @param {number|string} id - Product ID
-     * @param {Object} updateData - Fields to update
-     * @returns {Promise<Object>} Updated product
-     */
     async update(id, updateData) {
         try {
             const {
@@ -215,100 +235,87 @@ class ProductRepository {
             } = updateData;
 
             const update = { updatedAt: new Date() };
-            if (name) update.name = name;
-            if (slug) update.slug = slug;
-            if (description) update.description = description;
-            if (sku) update.sku = sku;
-            if (price) update.price = parseFloat(price);
+            if (name !== undefined) update.name = name;
+            if (slug !== undefined) update.slug = slug;
+            if (description !== undefined) update.description = description;
+            if (sku !== undefined) update.sku = sku;
+            if (price !== undefined) update.price = parseFloat(price);
             if (salePrice !== undefined) {
                 update.salePrice = salePrice ? parseFloat(salePrice) : null;
             }
-            if (categoryId) update.categoryId = parseInt(categoryId);
-            if (unit) update.unit = unit;
-            if (weight) update.weight = parseFloat(weight);
-            if (dimensions) update.dimensions = dimensions;
-            if (images) update.images = images;
-            if (tags) {
-                update.tags = typeof tags === "string" ? tags.split(",").map((t) => t.trim()) : tags;
-            }
+            if (categoryId !== undefined) update.categoryId = toObjectIdExt(categoryId);
+            if (unit !== undefined) update.unit = unit;
+            if (weight !== undefined) update.weight = weight ? parseFloat(weight) : null;
+            if (dimensions !== undefined) update.dimensions = dimensions;
+            if (images !== undefined) update.images = images;
+            if (tags !== undefined) update.tags = tags;
             if (isFeatured !== undefined) update.isFeatured = isFeatured;
             if (isActive !== undefined) update.isActive = isActive;
 
-            const product = await prisma.product.update({
-                where: { id: parseInt(id) },
-                data: update,
-                include: { category: true, inventory: true },
-            });
-
-            return product;
+            await updateOneById({ collection: "products", id, update });
+            return await this.findById(id);
         } catch (error) {
             throw new Error(`Database error in update: ${error.message}`);
         }
     }
 
-    /**
-     * Delete product
-     * @param {number|string} id - Product ID
-     * @returns {Promise<boolean>} Success status
-     */
     async delete(id) {
         try {
-            // Delete inventory first
-            await prisma.inventory.deleteMany({
-                where: { productId: parseInt(id) },
+            const product = await getRawById({ collection: "products", id });
+            if (!product) return false;
+
+            await prisma.$runCommandRaw({
+                delete: "inventories",
+                deletes: [{ q: { productId: product._id }, limit: 0 }],
             });
 
-            // Delete product
-            await prisma.product.delete({
-                where: { id: parseInt(id) },
+            await prisma.$runCommandRaw({
+                delete: "stock_histories",
+                deletes: [{ q: { productId: product._id }, limit: 0 }],
             });
 
+            await deleteOneById({ collection: "products", id });
             return true;
         } catch (error) {
             throw new Error(`Database error in delete: ${error.message}`);
         }
     }
 
-    /**
-     * Get featured products
-     * @param {number} limit - Number of featured products
-     * @returns {Promise<Array>}
-     */
     async getFeatured(limit = 8) {
         try {
-            return await prisma.product.findMany({
-                where: {
-                    isFeatured: true,
-                    isActive: true,
-                },
-                include: { category: true, inventory: true },
-                take: limit,
-                orderBy: { createdAt: "desc" },
+            return await aggregate({
+                collection: "products",
+                pipeline: [
+                    { $match: { isFeatured: true, isActive: true } },
+                    ...includeRelationsPipeline,
+                    { $sort: { createdAt: -1 } },
+                    { $limit: parseInt(limit, 10) },
+                ],
             });
         } catch (error) {
             throw new Error(`Database error in getFeatured: ${error.message}`);
         }
     }
 
-    /**
-     * Search products
-     * @param {string} query - Search query
-     * @param {number} limit - Limit results
-     * @returns {Promise<Array>}
-     */
     async search(query, limit = 10) {
         try {
-            return await prisma.product.findMany({
-                where: {
-                    OR: [
-                        { name: { contains: query, mode: "insensitive" } },
-                        { sku: { contains: query, mode: "insensitive" } },
-                        { description: { contains: query, mode: "insensitive" } },
-                    ],
-                    isActive: true,
-                },
-                include: { category: true, inventory: true },
-                take: limit,
+            const safe = escapeRegex(query);
+            return await aggregate({
+                collection: "products",
+                pipeline: [
+                    {
+                        $match: {
+                            $or: [
+                                { name: { $regex: safe, $options: "i" } },
+                                { sku: { $regex: safe, $options: "i" } },
+                                { description: { $regex: safe, $options: "i" } },
+                            ],
+                            isActive: true,
+                        },
+                    },
+                    ...includeRelationsPipeline,
+                    { $limit: parseInt(limit, 10) },
+                ],
             });
         } catch (error) {
             throw new Error(`Database error in search: ${error.message}`);

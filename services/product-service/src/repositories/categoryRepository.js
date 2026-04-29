@@ -1,24 +1,23 @@
-/**
- * ============================================
- * CATEGORY REPOSITORY
- * ============================================
- * Data access layer untuk Category
- */
-
-const prisma = require("../config/prisma");
+const {
+    toObjectIdExt,
+    escapeRegex,
+    findOne,
+    find,
+    count,
+    aggregate,
+    insertOne,
+    updateOneById,
+    deleteOneById,
+} = require("../utils/mongoRaw");
 
 class CategoryRepository {
-    /**
-     * Create category
-     * @param {Object} categoryData - Category data
-     * @returns {Promise<Object>} Created category
-     */
     async create(categoryData) {
         try {
             const { name, slug, description, icon } = categoryData;
 
-            const category = await prisma.category.create({
-                data: {
+            await insertOne({
+                collection: "categories",
+                document: {
                     name,
                     slug,
                     description: description || null,
@@ -29,84 +28,121 @@ class CategoryRepository {
                 },
             });
 
-            return category;
+            return await findOne({
+                collection: "categories",
+                filter: { slug },
+                sort: { createdAt: -1 },
+            });
         } catch (error) {
             throw new Error(`Database error in create: ${error.message}`);
         }
     }
 
-    /**
-     * Find by slug
-     * @param {string} slug - Category slug
-     * @returns {Promise<Object|null>}
-     */
     async findBySlug(slug) {
         try {
-            return await prisma.category.findUnique({
-                where: { slug },
+            return await findOne({
+                collection: "categories",
+                filter: { slug },
             });
         } catch (error) {
             throw new Error(`Database error in findBySlug: ${error.message}`);
         }
     }
 
-    /**
-     * Find by ID
-     * @param {number|string} id - Category ID
-     * @returns {Promise<Object|null>}
-     */
     async findById(id) {
         try {
-            return await prisma.category.findUnique({
-                where: { id: parseInt(id) },
-                include: {
-                    _count: {
-                        select: { products: true },
+            const rows = await aggregate({
+                collection: "categories",
+                pipeline: [
+                    {
+                        $addFields: {
+                            idString: { $toString: "$_id" },
+                        },
                     },
-                },
+                    { $match: { idString: String(id) } },
+                    {
+                        $lookup: {
+                            from: "products",
+                            let: { categoryId: "$_id" },
+                            pipeline: [
+                                { $match: { $expr: { $eq: ["$categoryId", "$$categoryId"] } } },
+                                { $count: "count" },
+                            ],
+                            as: "productCountDocs",
+                        },
+                    },
+                    {
+                        $addFields: {
+                            _count: {
+                                products: {
+                                    $ifNull: [{ $arrayElemAt: ["$productCountDocs.count", 0] }, 0],
+                                },
+                            },
+                        },
+                    },
+                    { $project: { idString: 0, productCountDocs: 0 } },
+                    { $limit: 1 },
+                ],
             });
+
+            return rows[0] || null;
         } catch (error) {
             throw new Error(`Database error in findById: ${error.message}`);
         }
     }
 
-    /**
-     * Get all categories with pagination & filtering
-     * @param {Object} options - { page, limit, search, isActive }
-     * @returns {Promise<{categories: Array, total: number, page: number, limit: number, totalPages: number}>}
-     */
     async findAll(options = {}) {
         try {
             const { page = 1, limit = 10, search = "", isActive = true } = options;
-
             const skip = (page - 1) * limit;
 
-            // Build where clause
-            const where = {};
+            const match = {};
             if (search) {
-                where.OR = [
-                    { name: { contains: search, mode: "insensitive" } },
-                    { description: { contains: search, mode: "insensitive" } },
+                const safe = escapeRegex(search);
+                match.$or = [
+                    { name: { $regex: safe, $options: "i" } },
+                    { description: { $regex: safe, $options: "i" } },
                 ];
             }
-            if (isActive !== null) {
-                where.isActive = isActive === "true" || isActive === true;
+            if (isActive !== null && isActive !== undefined) {
+                match.isActive = isActive === "true" || isActive === true;
             }
 
-            // Get categories
             const [categories, total] = await Promise.all([
-                prisma.category.findMany({
-                    where,
-                    include: {
-                        _count: {
-                            select: { products: true },
+                aggregate({
+                    collection: "categories",
+                    pipeline: [
+                        { $match: match },
+                        {
+                            $lookup: {
+                                from: "products",
+                                let: { categoryId: "$_id" },
+                                pipeline: [
+                                    { $match: { $expr: { $eq: ["$categoryId", "$$categoryId"] } } },
+                                    { $count: "count" },
+                                ],
+                                as: "productCountDocs",
+                            },
                         },
-                    },
-                    skip,
-                    take: limit,
-                    orderBy: { createdAt: "desc" },
+                        {
+                            $addFields: {
+                                _count: {
+                                    products: {
+                                        $ifNull: [{ $arrayElemAt: ["$productCountDocs.count", 0] }, 0],
+                                    },
+                                },
+                            },
+                        },
+                        { $project: { productCountDocs: 0 } },
+                        { $sort: { createdAt: -1 } },
+                        { $skip: skip },
+                        { $limit: parseInt(limit, 10) },
+                    ],
                 }),
-                prisma.category.count({ where }),
+                count({
+                    collection: "categories",
+                    filter: match,
+                }),
             ]);
 
             return {
@@ -121,43 +157,37 @@ class CategoryRepository {
         }
     }
 
-    /**
-     * Update category
-     * @param {number|string} id - Category ID
-     * @param {Object} updateData - Fields to update
-     * @returns {Promise<Object>} Updated category
-     */
     async update(id, updateData) {
         try {
             const { name, slug, description, icon, isActive } = updateData;
 
             const update = { updatedAt: new Date() };
-            if (name) update.name = name;
-            if (slug) update.slug = slug;
+            if (name !== undefined) update.name = name;
+            if (slug !== undefined) update.slug = slug;
             if (description !== undefined) update.description = description || null;
             if (icon !== undefined) update.icon = icon || null;
             if (isActive !== undefined) update.isActive = isActive;
 
-            const category = await prisma.category.update({
-                where: { id: parseInt(id) },
-                data: update,
+            await updateOneById({
+                collection: "categories",
+                id,
+                update,
             });
 
-            return category;
+            return await findOne({
+                collection: "categories",
+                filter: { _id: toObjectIdExt(id) },
+            });
         } catch (error) {
             throw new Error(`Database error in update: ${error.message}`);
         }
     }
 
-    /**
-     * Delete category
-     * @param {number|string} id - Category ID
-     * @returns {Promise<boolean>} Success status
-     */
     async delete(id) {
         try {
-            await prisma.category.delete({
-                where: { id: parseInt(id) },
+            await deleteOneById({
+                collection: "categories",
+                id,
             });
             return true;
         } catch (error) {
@@ -165,20 +195,12 @@ class CategoryRepository {
         }
     }
 
-    /**
-     * Get all active categories
-     * @returns {Promise<Array>}
-     */
     async getActive() {
         try {
-            return await prisma.category.findMany({
-                where: { isActive: true },
-                include: {
-                    _count: {
-                        select: { products: true },
-                    },
-                },
-                orderBy: { name: "asc" },
+            return await find({
+                collection: "categories",
+                filter: { isActive: true },
+                sort: { name: 1 },
             });
         } catch (error) {
             throw new Error(`Database error in getActive: ${error.message}`);
