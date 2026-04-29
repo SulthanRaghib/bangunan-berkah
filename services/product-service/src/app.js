@@ -2,7 +2,6 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const path = require("path");
-const swaggerSpecs = require("./config/swagger");
 
 // Import shared middleware
 const { errorHandler, notFoundHandler, asyncHandler } = require("../../../shared");
@@ -28,9 +27,11 @@ const parseAllowedOrigins = (value) => {
     .filter(Boolean);
 };
 
-// ============================================
-// Middlewares
-// ============================================
+/**
+ * ============================================
+ * MIDDLEWARE CONFIGURATION
+ * ============================================
+ */
 const allowedOrigins = parseAllowedOrigins(
   process.env.CORS_ALLOWED_ORIGINS ||
   "http://localhost:3000,http://localhost:8080,http://localhost:8002"
@@ -57,24 +58,19 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve Swagger JSON for Gateway Aggregation
-app.get('/api/products/api-docs.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpecs);
-});
-
 // Static files (untuk serve uploaded images)
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// ============================================
-// Routes
-// ============================================
-app.use(healthRoutes); // Health check
-app.use("/api/products", productRoutes); // Product routes
-app.use("/api/categories", categoryRoutes); // Category routes
-app.use("/api/inventory", inventoryRoutes); // Inventory routes
+/**
+ * ============================================
+ * ROUTES
+ * ============================================
+ */
+app.use(healthRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
-// Root endpoint
 app.get("/", asyncHandler(async (req, res) => {
   res.json({
     service: "Product Service",
@@ -94,11 +90,7 @@ app.get("/", asyncHandler(async (req, res) => {
  * GLOBAL MIDDLEWARE
  * ============================================
  */
-
-// 404 handler (dari shared)
 app.use(notFoundHandler);
-
-// Global error handler (dari shared) - HARUS paling akhir
 app.use(errorHandler);
 
 module.exports = app;
