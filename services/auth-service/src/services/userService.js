@@ -19,6 +19,14 @@
 const userRepository = require("../repositories/userRepository");
 const { hashPassword } = require("../utils/bcrypt");
 
+const normalizeMongoId = (idValue) => {
+    if (!idValue) return null;
+    if (typeof idValue === "string") return idValue;
+    if (typeof idValue === "object" && idValue.$oid) return idValue.$oid;
+    if (typeof idValue?.toHexString === "function") return idValue.toHexString();
+    return String(idValue);
+};
+
 class UserService {
     /**
      * Get all users with pagination & filtering
@@ -68,10 +76,7 @@ class UserService {
     async updateUser(id, updateData, requestUser) {
         try {
             // Authorization: user hanya bisa update dirinya sendiri, kecuali admin
-            let tokenUserId = requestUser.id;
-            if (typeof tokenUserId === 'object' && tokenUserId.$oid) {
-                tokenUserId = tokenUserId.$oid;
-            }
+            const tokenUserId = normalizeMongoId(requestUser.id);
 
             if (requestUser.role !== "admin" && tokenUserId !== id) {
                 const error = new Error("Anda tidak memiliki izin mengubah user ini");

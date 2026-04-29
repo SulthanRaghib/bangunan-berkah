@@ -19,6 +19,14 @@ const prisma = require("../config/prisma");
 const { ObjectId } = require("mongodb");
 
 class UserRepository {
+    _normalizeId(idValue) {
+        if (!idValue) return null;
+        if (typeof idValue === "string") return idValue;
+        if (typeof idValue === "object" && idValue.$oid) return idValue.$oid;
+        if (typeof idValue?.toHexString === "function") return idValue.toHexString();
+        return String(idValue);
+    }
+
     /**
      * Find user by email
      * @param {string} email - User email
@@ -93,7 +101,7 @@ class UserRepository {
         try {
             const { name, email, password, role = "user" } = userData;
 
-            const result = await prisma.$runCommandRaw({
+            await prisma.$runCommandRaw({
                 insert: "users",
                 documents: [{
                     name,
@@ -101,20 +109,37 @@ class UserRepository {
                     password,
                     role,
                     createdAt: new Date(),
-                    updatedAt: new Date()
-                }]
+                    updatedAt: new Date(),
+                }],
             });
 
-            const userId = result.insertedId || result.insertedIds?.[0];
-            const userIdString = userId.$oid || userId;
+            const createdResult = await prisma.$runCommandRaw({
+                find: "users",
+                filter: { email },
+                sort: { createdAt: -1 },
+                limit: 1,
+                projection: {
+                    _id: 1,
+                    name: 1,
+                    email: 1,
+                    role: 1,
+                    createdAt: 1,
+                },
+            });
 
-            // Return created user
+            const createdUser = createdResult?.cursor?.firstBatch?.[0];
+            if (!createdUser) {
+                throw new Error("Failed to load created user");
+            }
+
             return {
-                id: userIdString,
-                name,
-                email,
-                role,
-                createdAt: new Date(),
+                id: this._normalizeId(createdUser._id),
+                name: createdUser.name,
+                email: createdUser.email,
+                role: createdUser.role,
+                createdAt: createdUser.createdAt?.$date
+                    ? new Date(createdUser.createdAt.$date)
+                    : new Date(createdUser.createdAt),
             };
         } catch (error) {
             throw new Error(`Database error in create: ${error.message}`);
@@ -320,7 +345,7 @@ class UserRepository {
      */
     _formatUser(user) {
         return {
-            id: user._id.$oid || user._id,
+            id: this._normalizeId(user.id || user._id),
             name: user.name,
             email: user.email,
             role: user.role,

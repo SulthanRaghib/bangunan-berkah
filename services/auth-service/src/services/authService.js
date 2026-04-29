@@ -31,6 +31,14 @@ const {
     rotateRefreshToken,
 } = require("../../../../shared/src/utils/token-blacklist.util");
 
+const normalizeMongoId = (idValue) => {
+    if (!idValue) return null;
+    if (typeof idValue === "string") return idValue;
+    if (typeof idValue === "object" && idValue.$oid) return idValue.$oid;
+    if (typeof idValue?.toHexString === "function") return idValue.toHexString();
+    return String(idValue);
+};
+
 class AuthService {
     /**
      * Register new user
@@ -116,7 +124,7 @@ class AuthService {
             }
 
             // Generate tokens
-            const userId = user._id.$oid || user._id;
+            const userId = normalizeMongoId(user.id || user._id);
             const tokenPayload = {
                 id: userId,
                 email: user.email,
