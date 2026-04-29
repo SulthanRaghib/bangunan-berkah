@@ -254,6 +254,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      - ./docs:/docs
       - ./services/api-gateway:/app
       - ./shared:/shared
       - /app/node_modules
