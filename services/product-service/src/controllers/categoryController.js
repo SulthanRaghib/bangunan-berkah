@@ -1,8 +1,19 @@
-const prisma = require("../config/prisma");
 const {
   createCategorySchema,
   updateCategorySchema,
 } = require("../utils/validation");
+const {
+  isValidObjectId,
+  toObjectIdExt,
+  escapeRegex,
+  findOne,
+  count,
+  aggregate,
+  insertOne,
+  getRawById,
+  updateOneById,
+  deleteOneById,
+} = require("../utils/mongoRaw");
 const {
   asyncHandler,
   validate,
@@ -30,14 +41,33 @@ exports.createCategory = asyncHandler(async (req, res) => {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
   // Check if slug exists
-  const existing = await prisma.category.findUnique({ where: { slug } });
+  const existing = await findOne({
+    collection: "categories",
+    filter: { slug },
+  });
+
   if (existing) {
     return sendBadRequest(res, "Kategori dengan nama tersebut sudah ada");
   }
 
   // Create category
-  const category = await prisma.category.create({
-    data: { name, slug, description, icon },
+  await insertOne({
+    collection: "categories",
+    document: {
+      name,
+      slug,
+      description: description || null,
+      icon: icon || null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+
+  const category = await findOne({
+    collection: "categories",
+    filter: { slug },
+    sort: { createdAt: -1 },
   });
 
   return sendSuccess(res, category, "Kategori berhasil dibuat", 201);
@@ -56,69 +86,147 @@ exports.getAllCategories = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
   const { search, isActive } = req.query;
 
-  // Build where clause
-  const where = {};
+  // Build Mongo match clause
+  const match = {};
   if (search) {
-    where.OR = [
-      { name: { contains: search } },
-      { description: { contains: search } },
+    const safe = escapeRegex(search);
+    match.$or = [
+      { name: { $regex: safe, $options: "i" } },
+      { description: { $regex: safe, $options: "i" } },
     ];
   }
+
   if (isActive !== undefined) {
-    where.isActive = isActive === "true";
+    match.isActive = isActive === "true";
   }
 
   // Get categories with pagination
   const [categories, total] = await Promise.all([
-    prisma.category.findMany({
-      where,
-      include: {
-        _count: {
-          select: { products: true },
+    aggregate({
+      collection: "categories",
+      pipeline: [
+        { $match: match },
+        {
+          $lookup: {
+            from: "products",
+            let: { categoryId: "$_id" },
+            pipeline: [
+              { $match: { $expr: { $eq: ["$categoryId", "$$categoryId"] } } },
+              { $count: "count" },
+            ],
+            as: "productCountDocs",
+          },
         },
-      },
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
+        {
+          $addFields: {
+            _count: {
+              products: {
+                $ifNull: [{ $arrayElemAt: ["$productCountDocs.count", 0] }, 0],
+              },
+            },
+          },
+        },
+        { $project: { productCountDocs: 0 } },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+      ],
     }),
-    prisma.category.count({ where }),
+    count({
+      collection: "categories",
+      filter: match,
+    }),
   ]);
 
-  return sendSuccess(res, {
-    data: categories,
-    pagination: buildPaginatedResponse(total, page, limit),
-  }, "Kategori berhasil diambil");
+  return sendSuccess(
+    res,
+    {
+      data: categories,
+      pagination: buildPaginatedResponse(total, page, limit),
+    },
+    "Kategori berhasil diambil"
+  );
 });
 
 /**
  * Get category by ID with products
  * @route GET /api/categories/:id
- * @param {number} id - Category ID
+ * @param {string} id - Category ID (ObjectId)
  * @returns {Object} { success, message, data }
  */
 exports.getCategoryById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const category = await prisma.category.findUnique({
-    where: { id: parseInt(id) },
-    include: {
-      products: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          price: true,
-          images: true,
-          isActive: true,
+  if (!isValidObjectId(id)) {
+    return sendBadRequest(res, "ID kategori tidak valid");
+  }
+
+  const rows = await aggregate({
+    collection: "categories",
+    pipeline: [
+      {
+        $addFields: {
+          idString: { $toString: "$_id" },
         },
-        where: { isActive: true },
-        take: 10,
       },
-      _count: {
-        select: { products: true },
+      { $match: { idString: id } },
+      {
+        $lookup: {
+          from: "products",
+          let: { categoryId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$categoryId", "$$categoryId"] },
+                    { $eq: ["$isActive", true] },
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                slug: 1,
+                price: 1,
+                images: 1,
+                isActive: 1,
+              },
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 10 },
+          ],
+          as: "products",
+        },
       },
-    },
+      {
+        $lookup: {
+          from: "products",
+          let: { categoryId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$categoryId", "$$categoryId"] } } },
+            { $count: "count" },
+          ],
+          as: "productCountDocs",
+        },
+      },
+      {
+        $addFields: {
+          _count: {
+            products: {
+              $ifNull: [{ $arrayElemAt: ["$productCountDocs.count", 0] }, 0],
+            },
+          },
+        },
+      },
+      { $project: { productCountDocs: 0, idString: 0 } },
+      { $limit: 1 },
+    ],
   });
+
+  const category = rows[0];
 
   if (!category) {
     return sendNotFound(res, "Kategori tidak ditemukan");
@@ -140,14 +248,16 @@ exports.getCategoryById = asyncHandler(async (req, res) => {
 exports.updateCategory = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
+  if (!isValidObjectId(id)) {
+    return sendBadRequest(res, "ID kategori tidak valid");
+  }
+
   // Validate input using shared validate
   const value = await validate(updateCategorySchema, req.body);
   const { name, description, icon, isActive } = value;
 
   // Check exists
-  const category = await prisma.category.findUnique({
-    where: { id: parseInt(id) },
-  });
+  const category = await getRawById({ collection: "categories", id });
 
   if (!category) {
     return sendNotFound(res, "Kategori tidak ditemukan");
@@ -156,17 +266,38 @@ exports.updateCategory = asyncHandler(async (req, res) => {
   // Prepare update data
   const updateData = {};
   if (name) {
+    const newSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const existingBySlug = await findOne({
+      collection: "categories",
+      filter: {
+        slug: newSlug,
+        _id: { $ne: toObjectIdExt(id) },
+      },
+    });
+
+    if (existingBySlug) {
+      return sendBadRequest(res, "Kategori dengan nama tersebut sudah ada");
+    }
+
     updateData.name = name;
-    updateData.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    updateData.slug = newSlug;
   }
+
   if (description !== undefined) updateData.description = description;
   if (icon !== undefined) updateData.icon = icon;
   if (isActive !== undefined) updateData.isActive = isActive;
+  updateData.updatedAt = new Date();
 
   // Update
-  const updated = await prisma.category.update({
-    where: { id: parseInt(id) },
-    data: updateData,
+  await updateOneById({
+    collection: "categories",
+    id,
+    update: updateData,
+  });
+
+  const updated = await findOne({
+    collection: "categories",
+    filter: { _id: toObjectIdExt(id) },
   });
 
   return sendSuccess(res, updated, "Kategori berhasil diperbarui");
@@ -181,31 +312,34 @@ exports.updateCategory = asyncHandler(async (req, res) => {
 exports.deleteCategory = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
+  if (!isValidObjectId(id)) {
+    return sendBadRequest(res, "ID kategori tidak valid");
+  }
+
   // Check exists
-  const category = await prisma.category.findUnique({
-    where: { id: parseInt(id) },
-    include: {
-      _count: {
-        select: { products: true },
-      },
-    },
-  });
+  const category = await getRawById({ collection: "categories", id });
 
   if (!category) {
     return sendNotFound(res, "Kategori tidak ditemukan");
   }
 
+  const productCount = await count({
+    collection: "products",
+    filter: { categoryId: category._id },
+  });
+
   // Check if has products
-  if (category._count.products > 0) {
+  if (productCount > 0) {
     return sendBadRequest(
       res,
-      `Tidak dapat menghapus kategori yang memiliki ${category._count.products} produk`
+      `Tidak dapat menghapus kategori yang memiliki ${productCount} produk`
     );
   }
 
   // Delete
-  await prisma.category.delete({
-    where: { id: parseInt(id) },
+  await deleteOneById({
+    collection: "categories",
+    id,
   });
 
   return sendSuccess(res, {}, "Kategori berhasil dihapus");
