@@ -6,14 +6,11 @@
  * - Middleware configuration
  * - Routes mounting
  * - Global error handling (dari shared)
- * - Swagger documentation
  */
 
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpecs = require("./config/swagger");
 
 // Import shared middleware
 const {
@@ -50,12 +47,9 @@ const parseAllowedOrigins = (value) => {
  * MIDDLEWARE CONFIGURATION
  * ============================================
  */
-
-// Parse JSON
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS
 const allowedOrigins = parseAllowedOrigins(
   process.env.CORS_ALLOWED_ORIGINS ||
   "http://localhost:3000,http://localhost:8080,http://localhost:8001"
@@ -64,7 +58,6 @@ const allowedOrigins = parseAllowedOrigins(
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow non-browser clients (curl, Postman, server-to-server)
       if (!origin) {
         return callback(null, true);
       }
@@ -83,83 +76,13 @@ app.use(
 
 /**
  * ============================================
- * SWAGGER DOCUMENTATION
- * ============================================
- */
-
-// Serve Swagger JSON (untuk API Gateway aggregation)
-app.get('/api/auth/api-docs.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpecs);
-});
-
-// Swagger UI
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
-  customJs: '/swagger-custom.js',
-  swaggerOptions: {
-    persistAuthorization: true,
-  },
-}));
-
-// Swagger custom script
-app.get('/swagger-custom.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.send(`
-    (function() {
-      const originalFetch = window.fetch;
-      window.fetch = function(...args) {
-        return originalFetch.apply(this, args).then(response => {
-          const clonedResponse = response.clone();
-          
-          if (args[0] && args[0].includes('/api/auth/login')) {
-            clonedResponse.json().then(data => {
-              if (data.data?.token) {
-                const token = data.data.token;
-                localStorage.setItem('jwtToken', token);
-                
-                setTimeout(() => {
-                  try {
-                    if (window.ui) {
-                      window.ui.authActions.authorize({
-                        bearerAuth: {
-                          name: "bearerAuth",
-                          schema: { type: "http", scheme: "bearer" },
-                          value: token
-                        }
-                      });
-                      console.log('✅ Token otomatis terisi!');
-                    }
-                  } catch (e) {
-                    console.log('Token:', token);
-                  }
-                }, 500);
-              }
-            }).catch(err => console.error('Error parsing response:', err));
-          }
-          
-          return response;
-        });
-      };
-      
-      console.log('🔐 Swagger Auto-Auth aktif!');
-    })();
-  `);
-});
-
-/**
- * ============================================
  * ROUTES
  * ============================================
  */
-
-// Health check endpoint
 app.use(healthRoutes);
-
-// API endpoints
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
-// Root endpoint
 app.get("/", asyncHandler(async (req, res) => {
   res.json({
     service: SERVICE_NAME,
@@ -170,7 +93,6 @@ app.get("/", asyncHandler(async (req, res) => {
       auth: "/api/auth",
       users: "/api/users",
       health: "/health",
-      docs: "/api-docs"
     }
   });
 }));
@@ -180,11 +102,7 @@ app.get("/", asyncHandler(async (req, res) => {
  * GLOBAL MIDDLEWARE
  * ============================================
  */
-
-// 404 handler (dari shared)
 app.use(notFoundHandler);
-
-// Global error handler (dari shared) - HARUS paling akhir
 app.use(errorHandler);
 
 module.exports = app;
