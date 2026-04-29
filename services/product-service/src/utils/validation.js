@@ -64,10 +64,10 @@ const createProductSchema = Joi.object({
     "number.base": "Harga diskon harus berupa angka",
     "number.positive": "Harga diskon harus lebih dari 0",
   }),
-  categoryId: Joi.number().integer().positive().required().messages({
-    "number.base": "ID kategori harus berupa angka",
-    "number.integer": "ID kategori harus berupa bilangan bulat",
-    "number.positive": "ID kategori harus lebih dari 0",
+  categoryId: Joi.string().length(24).hex().required().messages({
+    "string.base": "ID kategori harus berupa string",
+    "string.length": "ID kategori harus 24 karakter",
+    "string.hex": "ID kategori harus format ObjectId valid",
     "any.required": "ID kategori wajib diisi",
   }),
   unit: Joi.string().max(50).optional().messages({
@@ -118,10 +118,10 @@ const updateProductSchema = Joi.object({
     "number.base": "Harga diskon harus berupa angka",
     "number.positive": "Harga diskon harus lebih dari 0",
   }),
-  categoryId: Joi.number().integer().positive().optional().messages({
-    "number.base": "ID kategori harus berupa angka",
-    "number.integer": "ID kategori harus berupa bilangan bulat",
-    "number.positive": "ID kategori harus lebih dari 0",
+  categoryId: Joi.string().length(24).hex().optional().messages({
+    "string.base": "ID kategori harus berupa string",
+    "string.length": "ID kategori harus 24 karakter",
+    "string.hex": "ID kategori harus format ObjectId valid",
   }),
   unit: Joi.string().max(50).optional().messages({
     "string.max": "Satuan maksimal 50 karakter",
