@@ -26,6 +26,8 @@ info:
 servers:
   - url: /
     description: Current origin
+security:
+  - bearerAuth: []
 components:
   securitySchemes:
     bearerAuth:
@@ -87,6 +89,7 @@ paths:
       summary: Submit project review (Public)
       description: Pelanggan memberikan rating & review setelah proyek selesai. Tanpa login.
       tags: [Reviews]
+      security: []
       requestBody:
         required: true
         content:
@@ -109,6 +112,7 @@ paths:
     get:
       summary: Get review proyek (Public)
       tags: [Reviews]
+      security: []
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
       responses:
@@ -120,6 +124,7 @@ paths:
       summary: Submit testimoni (Public)
       description: Pelanggan submit testimoni. Status awal pending, butuh approval admin.
       tags: [Testimoni]
+      security: []
       requestBody:
         required: true
         content:
@@ -140,6 +145,7 @@ paths:
     get:
       summary: Daftar testimoni approved (Public)
       tags: [Testimoni]
+      security: []
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
         - { in: query, name: limit, schema: { type: integer, default: 10 } }
@@ -220,6 +226,7 @@ paths:
     post:
       summary: Submit pertanyaan (Public)
       tags: ["Q&A"]
+      security: []
       requestBody:
         required: true
         content:
@@ -237,6 +244,7 @@ paths:
     get:
       summary: Pertanyaan yang sudah dijawab (Public)
       tags: ["Q&A"]
+      security: []
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
         - { in: query, name: limit, schema: { type: integer, default: 10 } }

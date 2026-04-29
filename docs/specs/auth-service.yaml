@@ -21,6 +21,8 @@ info:
 servers:
   - url: /
     description: Current origin (gateway atau direct)
+security:
+  - bearerAuth: []
 components:
   securitySchemes:
     bearerAuth:
@@ -67,6 +69,7 @@ paths:
       summary: Pendaftaran pengguna baru
       description: Mendaftarkan akun baru. Email harus unik. Password di-hash dengan bcryptjs.
       tags: [Autentikasi]
+      security: []
       requestBody:
         required: true
         content:
@@ -88,6 +91,7 @@ paths:
       summary: Login pengguna
       description: Login dan mendapatkan JWT access token (berlaku 24 jam) + refresh token (7 hari).
       tags: [Autentikasi]
+      security: []
       requestBody:
         required: true
         content:
@@ -112,6 +116,7 @@ paths:
       summary: Refresh access token
       description: Mendapatkan access token baru menggunakan refresh token tanpa login ulang.
       tags: [Autentikasi]
+      security: []
       requestBody:
         required: true
         content:

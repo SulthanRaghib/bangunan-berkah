@@ -27,6 +27,8 @@ info:
 servers:
   - url: /
     description: Current origin
+security:
+  - bearerAuth: []
 components:
   securitySchemes:
     bearerAuth:
@@ -73,6 +75,7 @@ paths:
     get:
       summary: Daftar produk aktif (Public)
       tags: [Produk]
+      security: []
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
         - { in: query, name: limit, schema: { type: integer, default: 10 } }
@@ -114,6 +117,7 @@ paths:
     get:
       summary: Produk featured/unggulan (Public)
       tags: [Produk]
+      security: []
       parameters:
         - { in: query, name: limit, schema: { type: integer, default: 5 } }
       responses:
@@ -123,6 +127,7 @@ paths:
     get:
       summary: Detail produk by slug (Public)
       tags: [Produk]
+      security: []
       parameters:
         - { in: path, name: slug, required: true, schema: { type: string }, example: "semen-portland-type-i" }
       responses:
@@ -133,6 +138,7 @@ paths:
     get:
       summary: Detail produk by ID (Public)
       tags: [Produk]
+      security: []
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
@@ -212,6 +218,7 @@ paths:
     get:
       summary: Daftar kategori (Public)
       tags: [Kategori]
+      security: []
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
         - { in: query, name: limit, schema: { type: integer, default: 20 } }
@@ -238,6 +245,7 @@ paths:
     get:
       summary: Detail kategori + produknya (Public)
       tags: [Kategori]
+      security: []
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
