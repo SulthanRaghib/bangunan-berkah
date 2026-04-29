@@ -1,0 +1,345 @@
+openapi: 3.0.0
+info:
+  title: Project Service API
+  version: 1.0.0
+  description: |
+    Layanan Manajemen Proyek Konstruksi untuk PT Solusi Bangunan Berkah.
+
+    ## Fitur Utama
+    - CRUD proyek konstruksi dengan tracking progress
+    - Milestone management per proyek
+    - Document upload (kontrak, proposal, spesifikasi)
+    - Public tracking untuk klien via project code
+    - Dashboard statistik proyek
+
+    ## Aturan Akses
+    | Level | Contoh Endpoint |
+    |-------|-----------------|
+    | ✅ Public | GET /api/projects/track/:code, GET /api/projects/summary/:code |
+    | 🔐 Admin | Semua CRUD, milestone, documents, dashboard |
+
+    ## Test Credentials
+    | Role | Email | Password |
+    |------|-------|----------|
+    | Admin | admin@solusi-bangunan.com | admin123 |
+
+    ## Sample Project Codes
+    - PRJ-2025-001, PRJ-2025-002
+  contact:
+    name: PT Solusi Bangunan Berkah
+    email: admin@solusi-bangunan.com
+servers:
+  - url: /
+    description: Current origin
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Project:
+      type: object
+      required: [projectCode, projectName, customerName]
+      properties:
+        _id: { type: string }
+        projectCode: { type: string, example: "PRJ-2025-001" }
+        projectName: { type: string, example: "Pembangunan Rumah Tipe 45" }
+        description: { type: string }
+        projectType: { type: string, enum: [konstruksi, furniture] }
+        customerName: { type: string }
+        customerEmail: { type: string, format: email }
+        customerPhone: { type: string }
+        customerAddress: { type: string }
+        startDate: { type: string, format: date }
+        estimatedEndDate: { type: string, format: date }
+        status: { type: string, enum: [planning, in_progress, completed, on_hold, cancelled] }
+        budget: { type: number }
+        progress: { type: number, minimum: 0, maximum: 100 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Milestone:
+      type: object
+      required: [name, targetDate]
+      properties:
+        _id: { type: string }
+        projectId: { type: string }
+        name: { type: string, example: "Pondasi & Struktur" }
+        description: { type: string }
+        targetDate: { type: string, format: date }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        status: { type: string, enum: [PENDING, ON_PROGRESS, COMPLETED] }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+tags:
+  - name: Public - Project Tracking
+    description: Endpoint publik untuk klien tracking proyek
+  - name: Projects
+    description: Manajemen proyek (Admin only)
+  - name: Milestones
+    description: Manajemen milestone proyek (Admin only)
+  - name: Documents
+    description: Upload & manajemen dokumen proyek (Admin only)
+  - name: Dashboard
+    description: Statistik & aktivitas proyek (Admin only)
+paths:
+  # ═══════════ PUBLIC TRACKING ═══════════
+  /api/projects/track/{projectCode}:
+    get:
+      summary: Track progress proyek (Public)
+      tags: [Public - Project Tracking]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string }, example: "PRJ-2025-001" }
+      responses:
+        "200": { description: Data tracking proyek }
+        "404": { description: Proyek tidak ditemukan }
+  /api/projects/summary/{projectCode}:
+    get:
+      summary: Summary proyek (Public)
+      tags: [Public - Project Tracking]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string }, example: "PRJ-2025-001" }
+      responses:
+        "200": { description: Summary proyek }
+        "404": { description: Proyek tidak ditemukan }
+  # ═══════════ PROJECTS CRUD ═══════════
+  /api/projects:
+    get:
+      summary: Daftar semua proyek (Admin)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 10 } }
+        - { in: query, name: status, schema: { type: string, enum: [planning, in_progress, completed, on_hold, cancelled] } }
+        - { in: query, name: search, schema: { type: string }, description: "Cari nama/kode proyek" }
+      responses:
+        "200": { description: Daftar proyek }
+        "401": { description: Unauthorized }
+    post:
+      summary: Buat proyek baru (Admin)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectName, projectType, customerName, customerEmail, customerPhone, startDate, estimatedEndDate]
+              properties:
+                projectName: { type: string, example: "Pembangunan Rumah Tipe 45" }
+                description: { type: string }
+                projectType: { type: string, enum: [konstruksi, furniture] }
+                customerName: { type: string, example: "Budi Santoso" }
+                customerEmail: { type: string, format: email }
+                customerPhone: { type: string, example: "081234567890" }
+                customerAddress: { type: string }
+                startDate: { type: string, format: date, example: "2025-01-15" }
+                estimatedEndDate: { type: string, format: date, example: "2025-06-15" }
+                budget: { type: number, example: 500000000 }
+                notes: { type: string }
+      responses:
+        "201": { description: Proyek berhasil dibuat }
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden - Admin only }
+  /api/projects/{projectCode}:
+    get:
+      summary: Detail proyek by code (Admin)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string }, example: "PRJ-2025-001" }
+      responses:
+        "200": { description: Detail proyek }
+        "404": { description: Proyek tidak ditemukan }
+    put:
+      summary: Update proyek (Admin)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectName: { type: string }
+                projectType: { type: string, enum: [konstruksi, furniture] }
+                customerName: { type: string }
+                customerEmail: { type: string, format: email }
+                customerPhone: { type: string }
+                customerAddress: { type: string }
+                description: { type: string }
+                startDate: { type: string, format: date }
+                estimatedEndDate: { type: string, format: date }
+                status: { type: string, enum: [pending, in_progress, on_hold, completed, cancelled] }
+                budget: { type: number }
+                notes: { type: string }
+      responses:
+        "200": { description: Proyek berhasil diperbarui }
+        "404": { description: Proyek tidak ditemukan }
+    delete:
+      summary: Hapus proyek (Admin)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Proyek berhasil dihapus }
+        "404": { description: Proyek tidak ditemukan }
+  /api/projects/{projectCode}/status:
+    patch:
+      summary: Update status proyek (Admin)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [planning, in_progress, completed, on_hold, cancelled] }
+      responses:
+        "200": { description: Status berhasil diubah }
+        "404": { description: Proyek tidak ditemukan }
+  # ═══════════ MILESTONES ═══════════
+  /api/projects/{projectCode}/milestones:
+    get:
+      summary: Daftar milestone proyek (Admin)
+      tags: [Milestones]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Daftar milestone }
+    post:
+      summary: Tambah milestone (Admin)
+      tags: [Milestones]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, targetDate]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                targetDate: { type: string, format: date }
+                status: { type: string, enum: [PENDING, ON_PROGRESS, COMPLETED] }
+                progress: { type: integer, minimum: 0, maximum: 100 }
+      responses:
+        "201": { description: Milestone berhasil ditambahkan }
+  /api/projects/{projectCode}/milestones/{milestoneId}:
+    patch:
+      summary: Update milestone (Admin)
+      tags: [Milestones]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+        - { in: path, name: milestoneId, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                status: { type: string, enum: [PENDING, ON_PROGRESS, COMPLETED] }
+                progress: { type: integer }
+                targetDate: { type: string, format: date }
+                photos: { type: array, items: { type: string, format: binary } }
+      responses:
+        "200": { description: Milestone berhasil diperbarui }
+    delete:
+      summary: Hapus milestone (Admin)
+      tags: [Milestones]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+        - { in: path, name: milestoneId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Milestone berhasil dihapus }
+  # ═══════════ DOCUMENTS ═══════════
+  /api/{projectCode}/documents:
+    get:
+      summary: Daftar dokumen proyek (Admin)
+      tags: [Documents]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Daftar dokumen }
+    post:
+      summary: Upload dokumen (Admin)
+      tags: [Documents]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document: { type: string, format: binary }
+                name: { type: string, example: "RAB Proyek" }
+                type: { type: string, example: "contract" }
+      responses:
+        "201": { description: Dokumen berhasil diupload }
+  /api/{projectCode}/documents/{documentId}:
+    delete:
+      summary: Hapus dokumen (Admin)
+      tags: [Documents]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+        - { in: path, name: documentId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Dokumen berhasil dihapus }
+  # ═══════════ DASHBOARD ═══════════
+  /api/dashboard/stats:
+    get:
+      summary: Dashboard statistik (Admin)
+      tags: [Dashboard]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Statistik dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      totalProjects: { type: integer }
+                      activeProjects: { type: integer }
+                      completedProjects: { type: integer }
+                      totalBudget: { type: number }
+  /api/dashboard/activities/{projectCode}:
+    get:
+      summary: Aktivitas proyek (Admin)
+      tags: [Dashboard]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Daftar aktivitas }

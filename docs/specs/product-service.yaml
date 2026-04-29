@@ -1,0 +1,359 @@
+openapi: 3.0.0
+info:
+  title: Product Service API
+  version: 1.0.0
+  description: |
+    Layanan Manajemen Produk, Kategori, dan Inventori untuk PT Solusi Bangunan Berkah.
+
+    ## Fitur Utama
+    - CRUD Produk dengan multi-image upload (max 5)
+    - Kategori produk dengan tree structure
+    - Inventori real-time dengan low stock alerts
+    - Featured product management
+
+    ## Aturan Akses
+    | Level | Contoh Endpoint |
+    |-------|-----------------|
+    | ✅ Public | GET /api/products, GET /api/categories |
+    | 🔐 Admin | POST/PUT/DELETE produk, kategori, inventori |
+
+    ## Test Credentials
+    | Role | Email | Password |
+    |------|-------|----------|
+    | Admin | admin@solusi-bangunan.com | admin123 |
+  contact:
+    name: PT Solusi Bangunan Berkah
+    email: admin@solusi-bangunan.com
+servers:
+  - url: /
+    description: Current origin
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Product:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        price: { type: number }
+        stock: { type: number }
+        featured: { type: boolean }
+        active: { type: boolean }
+        images: { type: array, items: { type: string } }
+        category_id: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Category:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        description: { type: string }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+tags:
+  - name: Produk
+    description: Manajemen produk (CRUD + featured/active toggle)
+  - name: Kategori
+    description: Manajemen kategori produk
+  - name: Inventori
+    description: Tracking stok dan monitoring inventori
+paths:
+  # ═══════════════ PRODUK ═══════════════
+  /api/products:
+    get:
+      summary: Daftar produk aktif (Public)
+      tags: [Produk]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 10 } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: category, schema: { type: string }, description: "Filter by category ID" }
+        - { in: query, name: sort, schema: { type: string, enum: [newest, price_asc, price_desc] } }
+      responses:
+        "200": { description: Daftar produk berhasil diambil }
+        "500": { description: Error server }
+    post:
+      summary: Buat produk baru (Admin)
+      tags: [Produk]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, price, stock, category_id]
+              properties:
+                name: { type: string, example: "Semen Portland Type I" }
+                slug: { type: string }
+                description: { type: string }
+                price: { type: number, example: 65000 }
+                stock: { type: integer, example: 500 }
+                category_id: { type: string }
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+                  maxItems: 5
+      responses:
+        "201": { description: Produk berhasil dibuat }
+        "400": { description: Validasi gagal }
+        "401": { description: Token tidak valid }
+        "403": { description: User bukan admin }
+        "500": { description: Error server }
+  /api/products/featured:
+    get:
+      summary: Produk featured/unggulan (Public)
+      tags: [Produk]
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 5 } }
+      responses:
+        "200": { description: Daftar produk featured }
+        "500": { description: Error server }
+  /api/products/slug/{slug}:
+    get:
+      summary: Detail produk by slug (Public)
+      tags: [Produk]
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string }, example: "semen-portland-type-i" }
+      responses:
+        "200": { description: Detail produk }
+        "404": { description: Produk tidak ditemukan }
+        "500": { description: Error server }
+  /api/products/{id}:
+    get:
+      summary: Detail produk by ID (Public)
+      tags: [Produk]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail produk }
+        "404": { description: Produk tidak ditemukan }
+    put:
+      summary: Update produk (Admin)
+      tags: [Produk]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                price: { type: number }
+                stock: { type: integer }
+                category_id: { type: string }
+                images: { type: array, items: { type: string, format: binary }, maxItems: 5 }
+      responses:
+        "200": { description: Produk berhasil diperbarui }
+        "404": { description: Produk tidak ditemukan }
+    delete:
+      summary: Hapus produk (Admin)
+      tags: [Produk]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Produk berhasil dihapus }
+        "404": { description: Produk tidak ditemukan }
+  /api/products/{id}/featured:
+    patch:
+      summary: Toggle featured status (Admin)
+      tags: [Produk]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [featured]
+              properties:
+                featured: { type: boolean, example: true }
+      responses:
+        "200": { description: Status featured berhasil diubah }
+        "404": { description: Produk tidak ditemukan }
+  /api/products/{id}/active:
+    patch:
+      summary: Toggle active status (Admin)
+      tags: [Produk]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active: { type: boolean, example: true }
+      responses:
+        "200": { description: Status aktif berhasil diubah }
+        "404": { description: Produk tidak ditemukan }
+  # ═══════════════ KATEGORI ═══════════════
+  /api/categories:
+    get:
+      summary: Daftar kategori (Public)
+      tags: [Kategori]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        "200": { description: Daftar kategori berhasil diambil }
+    post:
+      summary: Buat kategori baru (Admin)
+      tags: [Kategori]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Semen & Pasir" }
+                description: { type: string }
+      responses:
+        "201": { description: Kategori berhasil dibuat }
+        "409": { description: Kategori sudah ada }
+  /api/categories/{id}:
+    get:
+      summary: Detail kategori + produknya (Public)
+      tags: [Kategori]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail kategori }
+        "404": { description: Kategori tidak ditemukan }
+    put:
+      summary: Update kategori (Admin)
+      tags: [Kategori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        "200": { description: Kategori berhasil diperbarui }
+        "404": { description: Kategori tidak ditemukan }
+    delete:
+      summary: Hapus kategori (Admin)
+      tags: [Kategori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Kategori berhasil dihapus }
+        "409": { description: Kategori masih punya produk }
+  # ═══════════════ INVENTORI ═══════════════
+  /api/inventory:
+    get:
+      summary: Daftar inventori semua produk (Admin)
+      tags: [Inventori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: status, schema: { type: string, enum: [in_stock, low_stock, out_of_stock] } }
+      responses:
+        "200": { description: Daftar inventori }
+        "403": { description: User bukan admin }
+  /api/inventory/low-stock:
+    get:
+      summary: Produk dengan stok rendah (Admin)
+      tags: [Inventori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        "200": { description: Daftar produk low stock }
+  /api/inventory/update-stock:
+    post:
+      summary: Update stok produk (Admin)
+      tags: [Inventori]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity, type]
+              properties:
+                productId: { type: string }
+                quantity: { type: integer, example: 50 }
+                type: { type: string, enum: [in, out, adjustment, return] }
+                reference: { type: string, example: "PO-2026-001" }
+                notes: { type: string, example: "Restock dari supplier" }
+      responses:
+        "200": { description: Stok berhasil diperbarui }
+        "400": { description: Validasi gagal }
+        "404": { description: Produk tidak ditemukan }
+  /api/inventory/history/{productId}:
+    get:
+      summary: Histori perubahan stok (Admin)
+      tags: [Inventori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: productId, required: true, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: sortBy, schema: { type: string, enum: [newest, oldest], default: newest } }
+      responses:
+        "200": { description: Histori stok }
+        "404": { description: Produk tidak ditemukan }
+  /api/inventory/{productId}:
+    get:
+      summary: Detail inventori produk
+      tags: [Inventori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: productId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail inventori }
+        "404": { description: Produk tidak ditemukan }
+    put:
+      summary: Update setting inventori (Admin)
+      tags: [Inventori]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: productId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                minStock: { type: integer, example: 50 }
+                maxStock: { type: integer, example: 1000 }
+                isTracked: { type: boolean }
+      responses:
+        "200": { description: Setting inventori diperbarui }
+        "404": { description: Produk tidak ditemukan }

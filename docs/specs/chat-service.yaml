@@ -1,0 +1,14 @@
+openapi: 3.0.0
+info:
+  title: Chat Service API
+  version: 1.0.0
+  description: |
+    Layanan Chat untuk PT Solusi Bangunan Berkah.
+    Service ini masih dalam tahap pengembangan.
+  contact:
+    name: PT Solusi Bangunan Berkah
+    email: admin@solusi-bangunan.com
+servers:
+  - url: /
+    description: Current origin
+paths: {}

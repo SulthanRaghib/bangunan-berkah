@@ -1,0 +1,294 @@
+openapi: 3.0.0
+info:
+  title: Review Service API
+  version: 1.0.0
+  description: |
+    Layanan Review, Testimoni & Q&A untuk PT Solusi Bangunan Berkah.
+
+    ## Fitur Utama
+    - **Project Reviews** — Rating proyek setelah selesai (tanpa login)
+    - **Testimonials** — Testimoni pelanggan dengan admin approval workflow
+    - **Q&A** — Tanya jawab pelanggan dengan admin
+
+    ## Aturan Akses
+    | Level | Contoh Endpoint |
+    |-------|-----------------|
+    | ✅ Public | POST/GET reviews, POST/GET testimonials, POST/GET qa |
+    | 🔐 Admin | Semua /admin/* endpoints |
+
+    ## Test Credentials
+    | Role | Email | Password |
+    |------|-------|----------|
+    | Admin | admin@solusi-bangunan.com | admin123 |
+  contact:
+    name: PT Solusi Bangunan Berkah
+    email: admin@solusi-bangunan.com
+servers:
+  - url: /
+    description: Current origin
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Review:
+      type: object
+      properties:
+        id: { type: string }
+        projectCode: { type: string, example: "PRJ-2026-001" }
+        customerName: { type: string, example: "Budi Santoso" }
+        customerEmail: { type: string, format: email }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string }
+        photos: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+    Testimonial:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string, example: "John Doe" }
+        email: { type: string, format: email }
+        company: { type: string }
+        position: { type: string }
+        testimonialText: { type: string }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        isApproved: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    QA:
+      type: object
+      properties:
+        id: { type: string }
+        customerName: { type: string }
+        customerEmail: { type: string, format: email }
+        question: { type: string }
+        answer: { type: string }
+        status: { type: string, enum: [open, answered] }
+        createdAt: { type: string, format: date-time }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+tags:
+  - name: Reviews
+    description: Project review management
+  - name: Testimoni
+    description: Testimoni pelanggan (public + admin)
+  - name: "Q&A"
+    description: Tanya jawab pelanggan (public)
+  - name: "Q&A (Admin)"
+    description: Admin management untuk Q&A
+paths:
+  # ═══════════ REVIEWS ═══════════
+  /api/reviews:
+    post:
+      summary: Submit project review (Public)
+      description: Pelanggan memberikan rating & review setelah proyek selesai. Tanpa login.
+      tags: [Reviews]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectCode, customerName, customerEmail, rating]
+              properties:
+                projectCode: { type: string, example: "PRJ-2026-001" }
+                customerName: { type: string }
+                customerEmail: { type: string, format: email }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string }
+                photos: { type: array, items: { type: string } }
+      responses:
+        "201": { description: Review berhasil disubmit }
+        "400": { description: Validasi error atau proyek belum selesai }
+        "404": { description: Proyek tidak ditemukan }
+  /api/reviews/{projectCode}:
+    get:
+      summary: Get review proyek (Public)
+      tags: [Reviews]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail review }
+        "404": { description: Review tidak ditemukan }
+  # ═══════════ TESTIMONIALS ═══════════
+  /api/testimonials:
+    post:
+      summary: Submit testimoni (Public)
+      description: Pelanggan submit testimoni. Status awal pending, butuh approval admin.
+      tags: [Testimoni]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, testimonialText, rating]
+              properties:
+                name: { type: string, example: "Rina Wijaya" }
+                email: { type: string, format: email }
+                company: { type: string }
+                position: { type: string }
+                testimonialText: { type: string, example: "Layanan sangat profesional" }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        "201": { description: Testimoni diterima, menunggu approval }
+        "400": { description: Validasi gagal }
+    get:
+      summary: Daftar testimoni approved (Public)
+      tags: [Testimoni]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 10 } }
+        - { in: query, name: sortBy, schema: { type: string, enum: [newest, topRated] } }
+      responses:
+        "200": { description: Daftar testimoni approved }
+  /api/testimonials/admin/all:
+    get:
+      summary: Semua testimoni (Admin)
+      tags: [Testimoni]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 10 } }
+        - { in: query, name: status, schema: { type: string, enum: [all, approved, pending], default: all } }
+      responses:
+        "200": { description: Semua testimoni }
+        "403": { description: User bukan admin }
+  /api/testimonials/admin/{id}:
+    get:
+      summary: Detail testimoni (Admin)
+      tags: [Testimoni]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail testimoni }
+        "404": { description: Tidak ditemukan }
+    put:
+      summary: Update testimoni (Admin)
+      tags: [Testimoni]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isApproved: { type: boolean }
+                testimonialText: { type: string }
+                adminNotes: { type: string }
+      responses:
+        "200": { description: Testimoni diperbarui }
+        "404": { description: Tidak ditemukan }
+    delete:
+      summary: Hapus testimoni (Admin)
+      tags: [Testimoni]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Testimoni dihapus }
+        "404": { description: Tidak ditemukan }
+  /api/testimonials/admin/{id}/approve:
+    patch:
+      summary: Quick approve/reject testimoni (Admin)
+      tags: [Testimoni]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isApproved]
+              properties:
+                isApproved: { type: boolean, example: true }
+      responses:
+        "200": { description: Status approval berhasil diubah }
+        "404": { description: Tidak ditemukan }
+  # ═══════════ Q&A ═══════════
+  /api/qa:
+    post:
+      summary: Submit pertanyaan (Public)
+      tags: ["Q&A"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerName, customerEmail, question]
+              properties:
+                customerName: { type: string }
+                customerEmail: { type: string, format: email }
+                question: { type: string }
+      responses:
+        "201": { description: Pertanyaan berhasil disubmit }
+        "400": { description: Validasi error }
+    get:
+      summary: Pertanyaan yang sudah dijawab (Public)
+      tags: ["Q&A"]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 10 } }
+      responses:
+        "200": { description: Daftar Q&A yang sudah dijawab }
+  /api/qa/admin/all:
+    get:
+      summary: Semua pertanyaan (Admin)
+      tags: ["Q&A (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 10 } }
+        - { in: query, name: status, schema: { type: string, enum: [all, open, answered], default: all } }
+      responses:
+        "200": { description: Semua pertanyaan }
+        "403": { description: Forbidden }
+  /api/qa/admin/{id}:
+    get:
+      summary: Detail pertanyaan (Admin)
+      tags: ["Q&A (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail pertanyaan }
+        "404": { description: Tidak ditemukan }
+    delete:
+      summary: Hapus pertanyaan (Admin)
+      tags: ["Q&A (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Pertanyaan dihapus }
+        "404": { description: Tidak ditemukan }
+  /api/qa/admin/{id}/answer:
+    patch:
+      summary: Jawab pertanyaan (Admin)
+      tags: ["Q&A (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer: { type: string }
+      responses:
+        "200": { description: Pertanyaan berhasil dijawab }
+        "404": { description: Tidak ditemukan }
