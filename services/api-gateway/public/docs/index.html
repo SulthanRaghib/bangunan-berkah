@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API Documentation — PT Solusi Bangunan Berkah</title>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@8/styles.min.css" />
+    <style>
+        :root {
+            --brand-primary: #2563eb;
+            --brand-dark: #1e293b;
+            --brand-light: #f8fafc;
+            --sidebar-width: 260px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--brand-light);
+            color: var(--brand-dark);
+        }
+
+        /* ══════════════ TOP NAVIGATION ══════════════ */
+        .top-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: var(--brand-dark);
+            color: #fff;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .top-nav__brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .top-nav__brand span {
+            color: #94a3b8;
+            font-weight: 400;
+            font-size: 13px;
+        }
+
+        .top-nav__selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-nav__selector label {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .service-select {
+            appearance: none;
+            background: #334155;
+            color: #fff;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 8px 36px 8px 14px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            transition: border-color 0.2s;
+        }
+
+        .service-select:hover { border-color: var(--brand-primary); }
+        .service-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.3); }
+
+        /* ══════════════ STOPLIGHT CONTAINER ══════════════ */
+        .docs-container {
+            margin-top: 56px;
+            height: calc(100vh - 56px);
+        }
+
+        /* Loading state */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--brand-light);
+            z-index: 500;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .loading-overlay.active { display: flex; }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e2e8f0;
+            border-top-color: var(--brand-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        /* ══════════════ RESPONSIVE ══════════════ */
+        @media (max-width: 768px) {
+            .top-nav { padding: 0 12px; }
+            .top-nav__brand span { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="top-nav__brand">
+            🏗️ Bangunan Berkah
+            <span>API Documentation</span>
+        </div>
+        <div class="top-nav__selector">
+            <label for="serviceSelector">Service:</label>
+            <select id="serviceSelector" class="service-select">
+                <option value="auth-service">🔐 Auth Service</option>
+                <option value="product-service">📦 Product Service</option>
+                <option value="project-service" selected>🏗️ Project Service</option>
+                <option value="review-service">⭐ Review Service</option>
+                <option value="chat-service">💬 Chat Service</option>
+            </select>
+        </div>
+    </nav>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Memuat dokumentasi...</div>
+    </div>
+
+    <!-- Stoplight Elements Container -->
+    <div class="docs-container" id="docsContainer"></div>
+
+    <!-- Stoplight Elements Web Component -->
+    <script src="https://unpkg.com/@stoplight/elements@8/web-components.min.js"></script>
+    <script>
+        const selector = document.getElementById("serviceSelector");
+        const container = document.getElementById("docsContainer");
+        const loading = document.getElementById("loadingOverlay");
+
+        /**
+         * Render Stoplight Elements for the selected service.
+         * Uses the static YAML specs served from /docs/specs/.
+         */
+        function loadService(serviceName) {
+            loading.classList.add("active");
+
+            // Clear previous instance
+            container.innerHTML = "";
+
+            // Build spec URL (served as static files by the gateway)
+            const specUrl = `/docs/specs/${serviceName}.yaml`;
+
+            // Create Stoplight Elements web component
+            const el = document.createElement("elements-api");
+            el.setAttribute("apiDescriptionUrl", specUrl);
+            el.setAttribute("router", "hash");
+            el.setAttribute("layout", "sidebar");
+            el.setAttribute("tryItCredentialsPolicy", "same-origin");
+            el.style.height = "100%";
+
+            container.appendChild(el);
+
+            // Hide loading after a short delay (elements renders async)
+            setTimeout(() => {
+                loading.classList.remove("active");
+            }, 800);
+        }
+
+        // Event: service selector change
+        selector.addEventListener("change", (e) => {
+            loadService(e.target.value);
+            // Persist selection
+            localStorage.setItem("selectedService", e.target.value);
+        });
+
+        // On page load: restore previous selection or default
+        const saved = localStorage.getItem("selectedService");
+        if (saved && selector.querySelector(`option[value="${saved}"]`)) {
+            selector.value = saved;
+        }
+        loadService(selector.value);
+    </script>
+</body>
+</html>
