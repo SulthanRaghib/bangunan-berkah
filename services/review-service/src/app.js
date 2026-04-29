@@ -1,8 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-const swaggerUi = require("swagger-ui-express");
-const swaggerDocs = require("./config/swagger");
 const reviewRoutes = require("./routes/reviewRoutes");
 const testimonialRoutes = require("./routes/testimonialRoutes");
 const qaRoutes = require("./routes/qaRoutes");
@@ -47,14 +45,6 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan("dev"));
-
-// Serve Swagger JSON for Gateway Aggregation
-app.get('/api/reviews/api-docs.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(swaggerDocs);
-});
-
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Routes
 app.use("/api/reviews", reviewRoutes);
