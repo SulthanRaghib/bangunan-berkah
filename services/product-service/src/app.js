@@ -6,10 +6,15 @@ const path = require("path");
 // Import shared middleware
 const { errorHandler, notFoundHandler, asyncHandler } = require("../../../shared");
 
-// Import routes
+// Public Routes
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
+
+// Admin Routes
+const productAdminRoutes = require("./routes/productAdminRoutes");
+const categoryAdminRoutes = require("./routes/categoryAdminRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
+
 const healthRoutes = require("./routes/healthRoutes");
 
 dotenv.config();
@@ -67,8 +72,18 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
  * ============================================
  */
 app.use(healthRoutes);
+
+// ========================================
+// PUBLIC ROUTES (no auth required)
+// ========================================
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
+
+// ========================================
+// ADMIN ROUTES (auth + admin role required)
+// ========================================
+app.use("/api/products/admin", productAdminRoutes);
+app.use("/api/categories/admin", categoryAdminRoutes);
 app.use("/api/inventory", inventoryRoutes);
 
 app.get("/", asyncHandler(async (req, res) => {
