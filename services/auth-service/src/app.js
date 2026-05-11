@@ -21,6 +21,7 @@ const {
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
+const authProtectedRoutes = require("./routes/authProtectedRoutes");
 const userRoutes = require("./routes/userRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 
@@ -80,7 +81,16 @@ app.use(
  * ============================================
  */
 app.use(healthRoutes);
+
+// ========================================
+// PUBLIC ROUTES (no auth required)
+// ========================================
 app.use("/api/auth", authRoutes);
+
+// ========================================
+// PROTECTED ROUTES (auth required)
+// ========================================
+app.use("/api/auth", authProtectedRoutes);
 app.use("/api/users", userRoutes);
 
 app.get("/", asyncHandler(async (req, res) => {

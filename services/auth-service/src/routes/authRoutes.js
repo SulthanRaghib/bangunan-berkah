@@ -1,12 +1,14 @@
+/**
+ * Auth Public Routes
+ * No authentication required
+ */
+
 const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
-const { authMiddleware } = require("../../../../shared");
 
 router.post("/register", authController.register);
 router.post("/login", authController.login);
 router.post("/refresh", authController.refreshToken);
-router.get("/profile", authMiddleware, authController.getProfile);
-router.post("/logout", authMiddleware, authController.logout);
 
 module.exports = router;
