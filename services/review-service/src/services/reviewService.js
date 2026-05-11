@@ -43,6 +43,13 @@ class ReviewService {
     }
 
     /**
+     * Get review by ID
+     */
+    async getReviewById(id) {
+        return await ReviewRepository.findById(id);
+    }
+
+    /**
      * Get all reviews
      */
     async getAllReviews(filters = {}) {

@@ -1,10 +1,17 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const { errorHandler, notFoundHandler } = require("../../../shared");
+
+// Public Routes
 const reviewRoutes = require("./routes/reviewRoutes");
 const testimonialRoutes = require("./routes/testimonialRoutes");
 const qaRoutes = require("./routes/qaRoutes");
-const { errorHandler, notFoundHandler } = require("../../../shared");
+
+// Admin Routes
+const reviewAdminRoutes = require("./routes/reviewAdminRoutes");
+const testimonialAdminRoutes = require("./routes/testimonialAdminRoutes");
+const qaAdminRoutes = require("./routes/qaAdminRoutes");
 
 const app = express();
 
@@ -46,10 +53,19 @@ app.use(
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Routes
+// ========================================
+// PUBLIC ROUTES (no auth required)
+// ========================================
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/qa", qaRoutes);
+
+// ========================================
+// ADMIN ROUTES (auth + admin role required)
+// ========================================
+app.use("/api/reviews/admin", reviewAdminRoutes);
+app.use("/api/testimonials/admin", testimonialAdminRoutes);
+app.use("/api/qa/admin", qaAdminRoutes);
 
 // Health Check
 app.get("/health", (req, res) => {

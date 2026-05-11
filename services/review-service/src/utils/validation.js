@@ -106,9 +106,38 @@ const testimonialSchema = Joi.object({
     "any.required": "Body testimoni wajib diisi",
 });
 
+/**
+ * Review Update Validation Schema (Admin)
+ * All fields optional, but at least one must be provided
+ */
+const reviewUpdateSchema = Joi.object({
+    customerName: Joi.string().min(3).max(100).messages({
+        "string.min": "Nama minimal 3 karakter",
+        "string.max": "Nama maksimal 100 karakter",
+    }),
+    customerEmail: Joi.string().email().messages({
+        "string.email": "Format email tidak valid",
+    }),
+    rating: Joi.number().integer().min(1).max(5).messages({
+        "number.base": "Rating harus berupa angka",
+        "number.integer": "Rating harus berupa bilangan bulat",
+        "number.min": "Rating minimal 1",
+        "number.max": "Rating maksimal 5",
+    }),
+    comment: Joi.string().max(2000).messages({
+        "string.max": "Komentar maksimal 2000 karakter",
+    }),
+    photos: Joi.array().items(Joi.string()).messages({
+        "array.base": "Foto harus berupa array",
+    }),
+}).min(1).messages({
+    "object.min": "Minimal satu field harus diisi untuk update",
+});
+
 // Export only schemas - validation logic is handled by shared validate utility
 module.exports = {
     reviewSchema,
+    reviewUpdateSchema,
     qaSchema,
     answerSchema,
     testimonialSchema,
