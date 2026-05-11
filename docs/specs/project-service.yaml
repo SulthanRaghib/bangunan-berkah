@@ -79,13 +79,13 @@ components:
 tags:
   - name: Public - Project Tracking
     description: Endpoint publik untuk klien tracking proyek
-  - name: Projects
+  - name: "Projects (Admin)"
     description: Manajemen proyek (Admin only)
-  - name: Milestones
+  - name: "Milestones (Admin)"
     description: Manajemen milestone proyek (Admin only)
-  - name: Documents
+  - name: "Documents (Admin)"
     description: Upload & manajemen dokumen proyek (Admin only)
-  - name: Dashboard
+  - name: "Dashboard (Admin)"
     description: Statistik & aktivitas proyek (Admin only)
 paths:
   # ═══════════ PUBLIC TRACKING ═══════════
@@ -113,7 +113,7 @@ paths:
   /api/projects:
     get:
       summary: Daftar semua proyek (Admin)
-      tags: [Projects]
+      tags: ["Projects (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -125,7 +125,7 @@ paths:
         "401": { description: Unauthorized }
     post:
       summary: Buat proyek baru (Admin)
-      tags: [Projects]
+      tags: ["Projects (Admin)"]
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -153,7 +153,7 @@ paths:
   /api/projects/{projectCode}:
     get:
       summary: Detail proyek by code (Admin)
-      tags: [Projects]
+      tags: ["Projects (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string }, example: "PRJ-2025-001" }
@@ -162,7 +162,7 @@ paths:
         "404": { description: Proyek tidak ditemukan }
     put:
       summary: Update proyek (Admin)
-      tags: [Projects]
+      tags: ["Projects (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -189,7 +189,7 @@ paths:
         "404": { description: Proyek tidak ditemukan }
     delete:
       summary: Hapus proyek (Admin)
-      tags: [Projects]
+      tags: ["Projects (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -199,7 +199,7 @@ paths:
   /api/projects/{projectCode}/status:
     patch:
       summary: Update status proyek (Admin)
-      tags: [Projects]
+      tags: ["Projects (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -219,7 +219,7 @@ paths:
   /api/projects/{projectCode}/milestones:
     get:
       summary: Daftar milestone proyek (Admin)
-      tags: [Milestones]
+      tags: ["Milestones (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -227,7 +227,7 @@ paths:
         "200": { description: Daftar milestone }
     post:
       summary: Tambah milestone (Admin)
-      tags: [Milestones]
+      tags: ["Milestones (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -249,7 +249,7 @@ paths:
   /api/projects/{projectCode}/milestones/{milestoneId}:
     patch:
       summary: Update milestone (Admin)
-      tags: [Milestones]
+      tags: ["Milestones (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -270,7 +270,7 @@ paths:
         "200": { description: Milestone berhasil diperbarui }
     delete:
       summary: Hapus milestone (Admin)
-      tags: [Milestones]
+      tags: ["Milestones (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -281,7 +281,7 @@ paths:
   /api/{projectCode}/documents:
     get:
       summary: Daftar dokumen proyek (Admin)
-      tags: [Documents]
+      tags: ["Documents (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -289,7 +289,7 @@ paths:
         "200": { description: Daftar dokumen }
     post:
       summary: Upload dokumen (Admin)
-      tags: [Documents]
+      tags: ["Documents (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -309,7 +309,7 @@ paths:
   /api/{projectCode}/documents/{documentId}:
     delete:
       summary: Hapus dokumen (Admin)
-      tags: [Documents]
+      tags: ["Documents (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }
@@ -320,7 +320,7 @@ paths:
   /api/dashboard/stats:
     get:
       summary: Dashboard statistik (Admin)
-      tags: [Dashboard]
+      tags: ["Dashboard (Admin)"]
       security: [{ bearerAuth: [] }]
       responses:
         "200":
@@ -341,7 +341,7 @@ paths:
   /api/dashboard/activities/{projectCode}:
     get:
       summary: Aktivitas proyek (Admin)
-      tags: [Dashboard]
+      tags: ["Dashboard (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: projectCode, required: true, schema: { type: string } }

@@ -10,6 +10,13 @@ info:
     - Role-based access control (admin, user)
     - Profile management
 
+    ## Aturan Akses
+    | Level | Contoh Endpoint |
+    |-------|-----------------|
+    | ✅ Public | POST /api/auth/register, POST /api/auth/login, POST /api/auth/refresh |
+    | 🔒 Protected | GET /api/auth/profile, POST /api/auth/logout |
+    | 🔐 Admin | GET/PUT/DELETE /api/users |
+
     ## Test Credentials
     | Role | Email | Password |
     |------|-------|----------|
@@ -59,16 +66,19 @@ components:
         success: { type: boolean, example: false }
         message: { type: string, example: "Email sudah terdaftar" }
 tags:
-  - name: Autentikasi
-    description: Login, Register, Refresh Token, Logout
-  - name: Pengguna
-    description: Manajemen data pengguna
+  - name: "Public - Autentikasi"
+    description: Endpoint publik untuk register, login, dan refresh token
+  - name: "Protected - Profil"
+    description: Endpoint yang memerlukan login (Bearer token)
+  - name: "Pengguna (Admin)"
+    description: Manajemen data pengguna (Admin only)
 paths:
+  # ═══════════ PUBLIC - AUTENTIKASI ═══════════
   /api/auth/register:
     post:
-      summary: Pendaftaran pengguna baru
+      summary: Pendaftaran pengguna baru (Public)
       description: Mendaftarkan akun baru. Email harus unik. Password di-hash dengan bcryptjs.
-      tags: [Autentikasi]
+      tags: ["Public - Autentikasi"]
       security: []
       requestBody:
         required: true
@@ -88,9 +98,9 @@ paths:
         "500": { description: Error server }
   /api/auth/login:
     post:
-      summary: Login pengguna
+      summary: Login pengguna (Public)
       description: Login dan mendapatkan JWT access token (berlaku 24 jam) + refresh token (7 hari).
-      tags: [Autentikasi]
+      tags: ["Public - Autentikasi"]
       security: []
       requestBody:
         required: true
@@ -113,9 +123,9 @@ paths:
         "500": { description: Error server }
   /api/auth/refresh:
     post:
-      summary: Refresh access token
+      summary: Refresh access token (Public)
       description: Mendapatkan access token baru menggunakan refresh token tanpa login ulang.
-      tags: [Autentikasi]
+      tags: ["Public - Autentikasi"]
       security: []
       requestBody:
         required: true
@@ -130,11 +140,12 @@ paths:
         "200": { description: Token berhasil di-refresh }
         "401": { description: Refresh token tidak valid }
         "500": { description: Error server }
+  # ═══════════ PROTECTED - PROFIL ═══════════
   /api/auth/profile:
     get:
-      summary: Ambil profil pengguna saat ini
+      summary: Ambil profil pengguna saat ini (Protected)
       description: Mengambil profil berdasarkan JWT token di header Authorization.
-      tags: [Autentikasi]
+      tags: ["Protected - Profil"]
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Profil berhasil diambil }
@@ -142,19 +153,20 @@ paths:
         "500": { description: Error server }
   /api/auth/logout:
     post:
-      summary: Logout pengguna
+      summary: Logout pengguna (Protected)
       description: Logout dan invalidate session. Harus login ulang setelahnya.
-      tags: [Autentikasi]
+      tags: ["Protected - Profil"]
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Logout berhasil }
         "401": { description: Token tidak valid }
         "500": { description: Error server }
+  # ═══════════ ADMIN - PENGGUNA ═══════════
   /api/users:
     get:
       summary: Daftar semua pengguna (Admin)
       description: Melihat daftar semua pengguna terdaftar. Mendukung pagination dan filter.
-      tags: [Pengguna]
+      tags: ["Pengguna (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -168,9 +180,9 @@ paths:
         "500": { description: Error server }
   /api/users/{id}:
     get:
-      summary: Detail pengguna
+      summary: Detail pengguna (Admin)
       description: User biasa hanya bisa lihat profil sendiri, admin bisa lihat semua.
-      tags: [Pengguna]
+      tags: ["Pengguna (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -181,9 +193,9 @@ paths:
         "404": { description: Pengguna tidak ditemukan }
         "500": { description: Error server }
     put:
-      summary: Update data pengguna
+      summary: Update data pengguna (Admin)
       description: User biasa update profil sendiri, admin bisa update semua.
-      tags: [Pengguna]
+      tags: ["Pengguna (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -207,7 +219,7 @@ paths:
     delete:
       summary: Hapus pengguna (Admin)
       description: Menghapus akun pengguna secara permanen. Tidak dapat dibatalkan.
-      tags: [Pengguna]
+      tags: ["Pengguna (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }

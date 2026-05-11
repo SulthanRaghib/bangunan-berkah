@@ -63,18 +63,22 @@ components:
         success: { type: boolean, example: false }
         message: { type: string }
 tags:
-  - name: Produk
-    description: Manajemen produk (CRUD + featured/active toggle)
-  - name: Kategori
-    description: Manajemen kategori produk
-  - name: Inventori
-    description: Tracking stok dan monitoring inventori
+  - name: "Public - Produk"
+    description: Endpoint publik untuk melihat daftar & detail produk
+  - name: "Public - Kategori"
+    description: Endpoint publik untuk melihat daftar & detail kategori
+  - name: "Produk (Admin)"
+    description: Manajemen produk (Admin only)
+  - name: "Kategori (Admin)"
+    description: Manajemen kategori (Admin only)
+  - name: "Inventori (Admin)"
+    description: Tracking stok dan monitoring inventori (Admin only)
 paths:
-  # ═══════════════ PRODUK ═══════════════
+  # ═══════════════ PUBLIC - PRODUK ═══════════════
   /api/products:
     get:
       summary: Daftar produk aktif (Public)
-      tags: [Produk]
+      tags: ["Public - Produk"]
       security: []
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -85,9 +89,63 @@ paths:
       responses:
         "200": { description: Daftar produk berhasil diambil }
         "500": { description: Error server }
+  /api/products/featured:
+    get:
+      summary: Produk featured/unggulan (Public)
+      tags: ["Public - Produk"]
+      security: []
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 5 } }
+      responses:
+        "200": { description: Daftar produk featured }
+        "500": { description: Error server }
+  /api/products/slug/{slug}:
+    get:
+      summary: Detail produk by slug (Public)
+      tags: ["Public - Produk"]
+      security: []
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string }, example: "semen-portland-type-i" }
+      responses:
+        "200": { description: Detail produk }
+        "404": { description: Produk tidak ditemukan }
+        "500": { description: Error server }
+  /api/products/{id}:
+    get:
+      summary: Detail produk by ID (Public)
+      tags: ["Public - Produk"]
+      security: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail produk }
+        "404": { description: Produk tidak ditemukan }
+  # ═══════════════ PUBLIC - KATEGORI ═══════════════
+  /api/categories:
+    get:
+      summary: Daftar kategori (Public)
+      tags: ["Public - Kategori"]
+      security: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        "200": { description: Daftar kategori berhasil diambil }
+  /api/categories/{id}:
+    get:
+      summary: Detail kategori + produknya (Public)
+      tags: ["Public - Kategori"]
+      security: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Detail kategori }
+        "404": { description: Kategori tidak ditemukan }
+  # ═══════════════ ADMIN - PRODUK ═══════════════
+  /api/products/admin:
     post:
       summary: Buat produk baru (Admin)
-      tags: [Produk]
+      tags: ["Produk (Admin)"]
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -112,41 +170,10 @@ paths:
         "400": { description: Validasi gagal }
         "401": { description: Token tidak valid }
         "403": { description: User bukan admin }
-        "500": { description: Error server }
-  /api/products/featured:
-    get:
-      summary: Produk featured/unggulan (Public)
-      tags: [Produk]
-      security: []
-      parameters:
-        - { in: query, name: limit, schema: { type: integer, default: 5 } }
-      responses:
-        "200": { description: Daftar produk featured }
-        "500": { description: Error server }
-  /api/products/slug/{slug}:
-    get:
-      summary: Detail produk by slug (Public)
-      tags: [Produk]
-      security: []
-      parameters:
-        - { in: path, name: slug, required: true, schema: { type: string }, example: "semen-portland-type-i" }
-      responses:
-        "200": { description: Detail produk }
-        "404": { description: Produk tidak ditemukan }
-        "500": { description: Error server }
-  /api/products/{id}:
-    get:
-      summary: Detail produk by ID (Public)
-      tags: [Produk]
-      security: []
-      parameters:
-        - { in: path, name: id, required: true, schema: { type: string } }
-      responses:
-        "200": { description: Detail produk }
-        "404": { description: Produk tidak ditemukan }
+  /api/products/admin/{id}:
     put:
       summary: Update produk (Admin)
-      tags: [Produk]
+      tags: ["Produk (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -168,17 +195,17 @@ paths:
         "404": { description: Produk tidak ditemukan }
     delete:
       summary: Hapus produk (Admin)
-      tags: [Produk]
+      tags: ["Produk (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "200": { description: Produk berhasil dihapus }
         "404": { description: Produk tidak ditemukan }
-  /api/products/{id}/featured:
+  /api/products/admin/{id}/featured:
     patch:
       summary: Toggle featured status (Admin)
-      tags: [Produk]
+      tags: ["Produk (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -194,10 +221,10 @@ paths:
       responses:
         "200": { description: Status featured berhasil diubah }
         "404": { description: Produk tidak ditemukan }
-  /api/products/{id}/active:
+  /api/products/admin/{id}/active:
     patch:
       summary: Toggle active status (Admin)
-      tags: [Produk]
+      tags: ["Produk (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -213,20 +240,11 @@ paths:
       responses:
         "200": { description: Status aktif berhasil diubah }
         "404": { description: Produk tidak ditemukan }
-  # ═══════════════ KATEGORI ═══════════════
-  /api/categories:
-    get:
-      summary: Daftar kategori (Public)
-      tags: [Kategori]
-      security: []
-      parameters:
-        - { in: query, name: page, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, schema: { type: integer, default: 20 } }
-      responses:
-        "200": { description: Daftar kategori berhasil diambil }
+  # ═══════════════ ADMIN - KATEGORI ═══════════════
+  /api/categories/admin:
     post:
       summary: Buat kategori baru (Admin)
-      tags: [Kategori]
+      tags: ["Kategori (Admin)"]
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -241,19 +259,10 @@ paths:
       responses:
         "201": { description: Kategori berhasil dibuat }
         "409": { description: Kategori sudah ada }
-  /api/categories/{id}:
-    get:
-      summary: Detail kategori + produknya (Public)
-      tags: [Kategori]
-      security: []
-      parameters:
-        - { in: path, name: id, required: true, schema: { type: string } }
-      responses:
-        "200": { description: Detail kategori }
-        "404": { description: Kategori tidak ditemukan }
+  /api/categories/admin/{id}:
     put:
       summary: Update kategori (Admin)
-      tags: [Kategori]
+      tags: ["Kategori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -271,18 +280,18 @@ paths:
         "404": { description: Kategori tidak ditemukan }
     delete:
       summary: Hapus kategori (Admin)
-      tags: [Kategori]
+      tags: ["Kategori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "200": { description: Kategori berhasil dihapus }
         "409": { description: Kategori masih punya produk }
-  # ═══════════════ INVENTORI ═══════════════
+  # ═══════════════ ADMIN - INVENTORI ═══════════════
   /api/inventory:
     get:
       summary: Daftar inventori semua produk (Admin)
-      tags: [Inventori]
+      tags: ["Inventori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -294,7 +303,7 @@ paths:
   /api/inventory/low-stock:
     get:
       summary: Produk dengan stok rendah (Admin)
-      tags: [Inventori]
+      tags: ["Inventori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -304,7 +313,7 @@ paths:
   /api/inventory/update-stock:
     post:
       summary: Update stok produk (Admin)
-      tags: [Inventori]
+      tags: ["Inventori (Admin)"]
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -326,7 +335,7 @@ paths:
   /api/inventory/history/{productId}:
     get:
       summary: Histori perubahan stok (Admin)
-      tags: [Inventori]
+      tags: ["Inventori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: productId, required: true, schema: { type: string } }
@@ -338,8 +347,8 @@ paths:
         "404": { description: Produk tidak ditemukan }
   /api/inventory/{productId}:
     get:
-      summary: Detail inventori produk
-      tags: [Inventori]
+      summary: Detail inventori produk (Admin)
+      tags: ["Inventori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: productId, required: true, schema: { type: string } }
@@ -348,7 +357,7 @@ paths:
         "404": { description: Produk tidak ditemukan }
     put:
       summary: Update setting inventori (Admin)
-      tags: [Inventori]
+      tags: ["Inventori (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: productId, required: true, schema: { type: string } }
