@@ -7,7 +7,7 @@ const ReviewRepository = require("../repositories/ReviewRepository");
 const { AppError, ValidationError } = require("../utils/errors");
 
 const PROJECT_SERVICE_URL =
-    process.env.PROJECT_SERVICE_URL || "http://project-service:3002";
+    process.env.PROJECT_SERVICE_URL || "http://project-service:8004";
 
 class ReviewService {
     /**

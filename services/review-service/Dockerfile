@@ -22,4 +22,4 @@ RUN npx prisma generate
 # Expose port (sesuaikan per service)
 EXPOSE 8005
 
-CMD ["npm", "start"]
+CMD ["sh", "-c", "npx prisma generate && npm start"]
