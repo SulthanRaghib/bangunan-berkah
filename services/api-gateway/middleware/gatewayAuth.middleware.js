@@ -31,17 +31,30 @@ const parsePathList = (value) => {
 /**
  * Cek apakah request memerlukan token (protected route)
  * Rute publik: exempt dari JWT verification
+ *
+ * Rules:
+ * 1. Any path containing "/admin" is ALWAYS protected
+ * 2. Specific public paths are exempt from JWT
+ * 3. Everything else requires JWT
  */
 const isProtectedRoute = (path) => {
+    // Rule 1: Admin paths always require authentication
+    if (path.includes("/admin")) {
+        return true;
+    }
+
+    // Rule 2: Specific public paths
     const publicPaths = [
         "/api/auth/login",
         "/api/auth/register",
         "/api/auth/refresh",
-        "/api/products", // GET products biasanya publik
-        "/api/categories", // GET categories publik
+        "/api/products",
+        "/api/categories",
         "/api/reviews",
         "/api/testimonials",
         "/api/qa",
+        "/api/projects/track",
+        "/api/projects/summary",
         "/health",
         "/docs",
         "/",
