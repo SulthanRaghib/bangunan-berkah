@@ -39,7 +39,7 @@ const parseAllowedOrigins = (value) => {
  */
 const allowedOrigins = parseAllowedOrigins(
   process.env.CORS_ALLOWED_ORIGINS ||
-  "http://localhost:3000,http://localhost:8080,http://localhost:8002"
+  "http://localhost:5173,http://localhost:8080,http://localhost:8002"
 );
 
 app.use(

@@ -55,7 +55,7 @@ CHAT_SERVICE_URL=http://chat-service:8003
 PROJECT_SERVICE_URL=http://project-service:8004
 REVIEW_SERVICE_URL=http://review-service:8005
 
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 JWT_SECRET=your_super_secret_jwt_key_change_in_production
 
 REDIS_HOST=redis
@@ -124,7 +124,7 @@ Swagger docs akan menggabungkan JSON docs dari masing-masing service.
 ## 🔐 CORS Behavior
 
 - Gateway menggunakan konfigurasi:
-  - `origin: FRONTEND_URL || "http://localhost:3000"`
+  - `origin: FRONTEND_URL || "http://localhost:5173"`
   - `credentials: true`
 - Jika request berasal dari browser dengan origin di luar whitelist, browser akan memblokir akses.
 - Testing backend tanpa frontend (Postman/cURL/insomnia/server-to-server) tetap bisa dilakukan.

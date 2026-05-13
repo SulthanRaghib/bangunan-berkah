@@ -46,7 +46,7 @@ app.use(
 );
 
 const configuredCorsOrigins =
-  process.env.CORS_ALLOWED_ORIGINS || process.env.FRONTEND_URL || "http://localhost:3000";
+  process.env.CORS_ALLOWED_ORIGINS || process.env.FRONTEND_URL || "http://localhost:5173";
 const allowedOrigins = parseAllowedOrigins(configuredCorsOrigins);
 
 const corsOptions = {

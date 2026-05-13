@@ -880,7 +880,7 @@ Response 200:
 
 ### Catatan CORS
 
-- Jika `FRONTEND_URL` tidak di-set, gateway memakai fallback `http://localhost:3000`.
+- Jika `FRONTEND_URL` tidak di-set, gateway memakai fallback `http://localhost:5173`.
 - Request browser dari origin lain tidak akan lolos kebijakan CORS.
 - Testing backend via Postman/cURL/server-to-server tetap bisa karena tidak dibatasi oleh CORS browser policy.
 
