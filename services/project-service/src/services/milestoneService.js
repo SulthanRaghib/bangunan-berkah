@@ -1,6 +1,8 @@
 /**
  * Milestone Service
  * Handles all milestone business logic
+ * NOTE: Milestone progress is independent from project progress.
+ *       Project progress is updated directly via the progress endpoint.
  */
 
 const { v4: uuidv4 } = require("uuid");
@@ -8,40 +10,6 @@ const projectRepository = require("../repositories/projectRepository");
 const { ValidationError, AppError, NotFoundError } = require("../utils/errors");
 
 class MilestoneService {
-    /**
-     * Calculate project progress from milestones
-     */
-    calculateProjectProgress(milestones) {
-        if (!milestones || milestones.length === 0) return 0;
-
-        const totalProgress = milestones.reduce(
-            (sum, m) => sum + (m.progress || 0),
-            0
-        );
-        return Math.round(totalProgress / milestones.length);
-    }
-
-    /**
-     * Synchronize stored project progress from milestones
-     */
-    async syncProjectProgress(projectCode) {
-        const project = await projectRepository.findByCodeOptional(projectCode);
-
-        if (!project) {
-            throw new NotFoundError("Project");
-        }
-
-        const newProgress = this.calculateProjectProgress(project.milestones);
-
-        if (newProgress !== project.progress) {
-            await projectRepository.updateProject(projectCode, {
-                progress: newProgress,
-            });
-        }
-
-        return newProgress;
-    }
-
     /**
      * Add milestone to project
      */
@@ -84,11 +52,8 @@ class MilestoneService {
             // Add to project
             await projectRepository.addMilestone(projectCode, milestone);
 
-            const newProgress = await this.syncProjectProgress(projectCode);
-
             return {
                 milestone,
-                projectProgress: newProgress,
             };
         } catch (error) {
             throw error instanceof AppError
@@ -160,11 +125,8 @@ class MilestoneService {
                 updatedMilestoneData
             );
 
-            const newProgress = await this.syncProjectProgress(projectCode);
-
             return {
                 milestone: { id: milestoneId, ...updatedMilestoneData },
-                projectProgress: newProgress,
             };
         } catch (error) {
             throw error instanceof AppError
@@ -197,10 +159,8 @@ class MilestoneService {
             // Delete milestone
             await projectRepository.deleteMilestone(projectCode, milestoneId);
 
-            const newProgress = await this.syncProjectProgress(projectCode);
-
             return {
-                projectProgress: newProgress,
+                deleted: true,
             };
         } catch (error) {
             throw error instanceof AppError

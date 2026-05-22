@@ -114,13 +114,15 @@ class DashboardService {
                     startDate: project.startDate,
                     estimatedEndDate: project.estimatedEndDate,
                     actualEndDate: project.actualEndDate,
-                    daysRemaining: Math.max(
-                        0,
-                        Math.ceil(
-                            (project.estimatedEndDate - new Date()) /
-                            (1000 * 60 * 60 * 24)
+                    daysRemaining: project.estimatedEndDate
+                        ? Math.max(
+                            0,
+                            Math.ceil(
+                                (new Date(project.estimatedEndDate) - new Date()) /
+                                (1000 * 60 * 60 * 24)
+                            )
                         )
-                    ),
+                        : null,
                 },
                 milestones: {
                     total: milestones.length,

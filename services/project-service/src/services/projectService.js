@@ -18,19 +18,21 @@ class ProjectService {
             const newProject = await projectRepository.createProject({
                 projectCode,
                 projectName: projectData.projectName,
-                description: projectData.description,
+                description: projectData.description || null,
                 projectType: projectData.projectType,
                 customerName: projectData.customerName,
-                customerEmail: projectData.customerEmail,
-                customerPhone: projectData.customerPhone,
+                customerEmail: projectData.customerEmail || null,
+                customerPhone: projectData.customerPhone || null,
                 customerAddress: projectData.customerAddress,
                 budget: projectData.budget ? parseFloat(projectData.budget) : null,
                 actualCost: 0,
-                startDate: new Date(projectData.startDate),
-                estimatedEndDate: new Date(projectData.estimatedEndDate),
-                notes: projectData.notes,
-                createdBy: userId,
-                createdByName: userName,
+                startDate: projectData.startDate ? new Date(projectData.startDate) : null,
+                estimatedEndDate: projectData.estimatedEndDate ? new Date(projectData.estimatedEndDate) : null,
+                notes: projectData.notes || null,
+                progress: projectData.progress !== undefined ? parseFloat(projectData.progress) : 0,
+                photos: [],
+                createdBy: userId || null,
+                createdByName: userName || null,
             });
 
             return {
@@ -98,6 +100,68 @@ class ProjectService {
             }
 
             return await projectRepository.updateStatus(projectCode, status);
+        } catch (error) {
+            throw error instanceof AppError ? error : new AppError(error.message, 500);
+        }
+    }
+
+    /**
+     * Update project progress directly (0-100)
+     */
+    async updateProjectProgress(projectCode, progress) {
+        try {
+            const progressValue = parseFloat(progress);
+
+            if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
+                throw new ValidationError("Progress harus berupa angka antara 0 dan 100");
+            }
+
+            return await projectRepository.updateProject(projectCode, {
+                progress: progressValue,
+            });
+        } catch (error) {
+            throw error instanceof AppError ? error : new AppError(error.message, 500);
+        }
+    }
+
+    /**
+     * Upload project photos (documentation)
+     * Appends new photo URLs to existing photos array
+     */
+    async uploadProjectPhotos(projectCode, photoUrls) {
+        try {
+            if (!photoUrls || photoUrls.length === 0) {
+                throw new ValidationError("Minimal satu foto harus diupload");
+            }
+
+            return await projectRepository.addPhotos(projectCode, photoUrls);
+        } catch (error) {
+            throw error instanceof AppError ? error : new AppError(error.message, 500);
+        }
+    }
+
+    /**
+     * Get project photos
+     */
+    async getProjectPhotos(projectCode) {
+        try {
+            const project = await projectRepository.findByCode(projectCode);
+            return project.photos || [];
+        } catch (error) {
+            throw error instanceof AppError ? error : new AppError(error.message, 500);
+        }
+    }
+
+    /**
+     * Delete a project photo by URL
+     */
+    async deleteProjectPhoto(projectCode, photoUrl) {
+        try {
+            if (!photoUrl) {
+                throw new ValidationError("URL foto wajib diisi");
+            }
+
+            return await projectRepository.removePhoto(projectCode, photoUrl);
         } catch (error) {
             throw error instanceof AppError ? error : new AppError(error.message, 500);
         }

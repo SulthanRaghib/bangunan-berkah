@@ -28,6 +28,7 @@ class TrackingService {
                 projectType: project.projectType,
                 status: project.status,
                 progress: project.progress,
+                photos: project.photos || [],
                 startDate: project.startDate,
                 estimatedEndDate: project.estimatedEndDate,
                 actualEndDate: project.actualEndDate,
@@ -112,7 +113,11 @@ class TrackingService {
             }
 
             const milestones = (project.milestones || [])
-                .sort((a, b) => a.targetDate - b.targetDate)
+                .sort((a, b) => {
+                    if (!a.targetDate) return 1;
+                    if (!b.targetDate) return -1;
+                    return a.targetDate - b.targetDate;
+                })
                 .map((m) => ({
                     id: m.id,
                     title: m.title,
@@ -122,7 +127,7 @@ class TrackingService {
                     status: m.status,
                     progress: m.progress,
                     daysStatus:
-                        m.status === "completed"
+                        m.status === "completed" || m.status === "COMPLETED"
                             ? `Completed on ${m.actualCompletionDate}`
                             : m.targetDate < new Date()
                                 ? "Overdue"
