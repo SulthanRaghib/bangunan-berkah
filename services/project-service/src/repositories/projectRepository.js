@@ -20,7 +20,8 @@ class ProjectRepository extends BaseRepository {
             const success = await this.insertOne({
                 ...projectData,
                 status: "pending",
-                progress: 0,
+                progress: projectData.progress || 0,
+                photos: projectData.photos || [],
                 milestones: [],
                 reports: [],
                 documents: [],
@@ -133,6 +134,7 @@ class ProjectRepository extends BaseRepository {
             "status",
             "progress",
             "notes",
+            "photos",
         ];
 
         const filteredData = {};
@@ -149,6 +151,9 @@ class ProjectRepository extends BaseRepository {
                     value = new Date(value);
                 }
                 if (field === "budget" && value) {
+                    value = parseFloat(value);
+                }
+                if (field === "progress" && value !== undefined) {
                     value = parseFloat(value);
                 }
                 filteredData[field] = value;
@@ -190,6 +195,66 @@ class ProjectRepository extends BaseRepository {
 
         if (!success) {
             throw new AppError("Gagal mengupdate status project", 500);
+        }
+
+        return await this.findByCode(projectCode);
+    }
+
+    /**
+     * Add photos to project (append to existing array)
+     */
+    async addPhotos(projectCode, photoUrls) {
+        const exists = await this.exists({ projectCode });
+
+        if (!exists) {
+            throw new NotFoundError("Project");
+        }
+
+        const result = await this.runCommand({
+            update: this.collectionName,
+            updates: [
+                {
+                    q: { projectCode },
+                    u: {
+                        $push: { photos: { $each: photoUrls } },
+                        $set: { updatedAt: new Date() },
+                    },
+                },
+            ],
+        });
+
+        if (result.n === 0) {
+            throw new AppError("Gagal menambahkan foto", 500);
+        }
+
+        return await this.findByCode(projectCode);
+    }
+
+    /**
+     * Remove a photo from project by URL
+     */
+    async removePhoto(projectCode, photoUrl) {
+        const exists = await this.exists({ projectCode });
+
+        if (!exists) {
+            throw new NotFoundError("Project");
+        }
+
+        const result = await this.runCommand({
+            update: this.collectionName,
+            updates: [
+                {
+                    q: { projectCode },
+                    u: {
+                        $pull: { photos: photoUrl },
+                        $set: { updatedAt: new Date() },
+                    },
+                },
+            ],
+        });
+
+        if (result.n === 0) {
+            throw new AppError("Gagal menghapus foto", 500);
         }
 
         return await this.findByCode(projectCode);
@@ -418,7 +483,7 @@ class ProjectRepository extends BaseRepository {
     }
 
     /**
-     * Get project progress
+     * Get project progress (direct from project field, NOT accumulated from milestones)
      */
     async getProjectProgress(projectCode) {
         const project = await this.findOne({ projectCode });
@@ -428,19 +493,12 @@ class ProjectRepository extends BaseRepository {
         }
 
         const milestones = project.milestones || [];
-        const progress =
-            milestones.length > 0
-                ? Math.round(
-                    milestones.reduce((sum, m) => sum + (m.progress || 0), 0) /
-                    milestones.length
-                )
-                : 0;
 
         return {
             projectCode,
-            progress,
+            progress: project.progress || 0,
             milestoneCount: milestones.length,
-            completedCount: milestones.filter((m) => m.status === "completed")
+            completedCount: milestones.filter((m) => m.status === "completed" || m.status === "COMPLETED")
                 .length,
         };
     }
@@ -475,14 +533,22 @@ class ProjectRepository extends BaseRepository {
                     targetDate: milestoneDate,
                 };
             })
-            .sort((a, b) => a.targetDate - b.targetDate);
+            .sort((a, b) => {
+                if (!a.targetDate) return 1;
+                if (!b.targetDate) return -1;
+                return a.targetDate - b.targetDate;
+            });
 
-        // Calculate additional info
-        const duration = calculateDuration(startDate, estimatedEndDate);
-        const daysRemaining = Math.max(
-            0,
-            Math.ceil((estimatedEndDate - new Date()) / (1000 * 60 * 60 * 24))
-        );
+        // Calculate additional info (handle nullable dates)
+        const duration = startDate && estimatedEndDate
+            ? calculateDuration(startDate, estimatedEndDate)
+            : null;
+        const daysRemaining = estimatedEndDate
+            ? Math.max(
+                0,
+                Math.ceil((estimatedEndDate - new Date()) / (1000 * 60 * 60 * 24))
+            )
+            : null;
 
         return {
             id: project._id?.$oid || project._id,
@@ -500,7 +566,8 @@ class ProjectRepository extends BaseRepository {
             estimatedEndDate,
             actualEndDate,
             status: project.status,
-            progress: project.progress,
+            progress: project.progress || 0,
+            photos: project.photos || [],
             milestones: sortedMilestones,
             notes: project.notes,
             createdBy: project.createdBy,
@@ -510,7 +577,7 @@ class ProjectRepository extends BaseRepository {
             activities: project.activities || [],
             createdAt,
             updatedAt,
-            duration: `${duration} hari`,
+            duration: duration !== null ? `${duration} hari` : null,
             daysRemaining,
             isOverdue: daysRemaining === 0 && project.status !== "completed",
         };
@@ -537,9 +604,11 @@ class ProjectRepository extends BaseRepository {
             customerName: project.customerName,
             customerEmail: project.customerEmail,
             customerPhone: project.customerPhone,
+            customerAddress: project.customerAddress,
             projectType: project.projectType,
             status: project.status,
-            progress: project.progress,
+            progress: project.progress || 0,
+            photos: project.photos || [],
             budget: project.budget,
             actualCost: project.actualCost,
             startDate,

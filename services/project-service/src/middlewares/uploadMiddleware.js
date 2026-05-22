@@ -7,7 +7,7 @@ const { generateFileName } = require("../utils/fileHandler");
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         // decide folder: photos or documents
-        const isPhoto = req.originalUrl.includes("photos") || file.fieldname === "photo";
+        const isPhoto = req.originalUrl.includes("photos") || file.fieldname === "photo" || file.fieldname === "photos";
         const folderName = isPhoto ? "photos" : "documents";
         const uploadDir = path.join(__dirname, "../../uploads", folderName);
 

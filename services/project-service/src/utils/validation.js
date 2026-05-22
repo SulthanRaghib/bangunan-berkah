@@ -10,11 +10,11 @@ const createProjectSchema = Joi.object({
         "string.max": "Nama proyek maksimal 255 karakter",
         "any.required": "Nama proyek wajib diisi",
     }),
-    description: Joi.string().max(5000).optional().allow("").messages({
+    description: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Deskripsi maksimal 5000 karakter",
     }),
-    projectType: Joi.string().valid("konstruksi", "furniture").required().messages({
-        "any.only": "Tipe proyek harus 'konstruksi' atau 'furniture'",
+    projectType: Joi.string().valid("konstruksi", "furniture", "design_and_build").required().messages({
+        "any.only": "Tipe proyek harus 'konstruksi', 'furniture', atau 'design_and_build'",
         "any.required": "Tipe proyek wajib diisi",
     }),
     customerName: Joi.string().min(3).max(255).required().messages({
@@ -23,38 +23,39 @@ const createProjectSchema = Joi.object({
         "string.max": "Nama customer maksimal 255 karakter",
         "any.required": "Nama customer wajib diisi",
     }),
-    customerEmail: Joi.string().email().required().messages({
-        "string.empty": "Email customer tidak boleh kosong",
+    customerEmail: Joi.string().email().optional().allow("", null).messages({
         "string.email": "Format email tidak valid",
-        "any.required": "Email customer wajib diisi",
     }),
     customerPhone: Joi.string()
         .pattern(/^[0-9]{10,15}$/)
-        .required()
+        .optional()
+        .allow("", null)
         .messages({
-            "string.empty": "Nomor telepon tidak boleh kosong",
             "string.pattern.base": "Nomor telepon harus 10-15 digit angka",
-            "any.required": "Nomor telepon customer wajib diisi",
         }),
-    customerAddress: Joi.string().min(10).max(500).optional().allow("").messages({
-        "string.min": "Alamat customer minimal 10 karakter",
-        "string.max": "Alamat customer maksimal 500 karakter",
+    customerAddress: Joi.string().min(10).max(500).required().messages({
+        "string.empty": "Alamat proyek tidak boleh kosong",
+        "string.min": "Alamat proyek minimal 10 karakter",
+        "string.max": "Alamat proyek maksimal 500 karakter",
+        "any.required": "Alamat proyek wajib diisi",
     }),
-    budget: Joi.number().positive().optional().messages({
+    budget: Joi.number().positive().optional().allow(null).messages({
         "number.base": "Budget harus berupa angka",
         "number.positive": "Budget harus lebih dari 0",
     }),
-    startDate: Joi.date().required().messages({
+    startDate: Joi.date().optional().allow(null).messages({
         "date.base": "Tanggal mulai harus berupa tanggal valid",
-        "any.required": "Tanggal mulai wajib diisi",
     }),
-    estimatedEndDate: Joi.date().greater(Joi.ref("startDate")).required().messages({
+    estimatedEndDate: Joi.date().optional().allow(null).messages({
         "date.base": "Estimasi tanggal selesai harus berupa tanggal valid",
-        "date.greater": "Estimasi tanggal selesai harus setelah tanggal mulai",
-        "any.required": "Estimasi tanggal selesai wajib diisi",
     }),
-    notes: Joi.string().max(5000).optional().allow("").messages({
+    notes: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Catatan maksimal 5000 karakter",
+    }),
+    progress: Joi.number().min(0).max(100).optional().default(0).messages({
+        "number.base": "Progress harus berupa angka",
+        "number.min": "Progress minimal 0",
+        "number.max": "Progress maksimal 100",
     }),
 });
 
@@ -63,37 +64,38 @@ const updateProjectSchema = Joi.object({
         "string.min": "Nama proyek minimal 5 karakter",
         "string.max": "Nama proyek maksimal 255 karakter",
     }),
-    description: Joi.string().max(5000).optional().allow("").messages({
+    description: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Deskripsi maksimal 5000 karakter",
     }),
-    projectType: Joi.string().valid("konstruksi", "furniture").optional().messages({
-        "any.only": "Tipe proyek harus 'konstruksi' atau 'furniture'",
+    projectType: Joi.string().valid("konstruksi", "furniture", "design_and_build").optional().messages({
+        "any.only": "Tipe proyek harus 'konstruksi', 'furniture', atau 'design_and_build'",
     }),
     customerName: Joi.string().min(3).max(255).optional().messages({
         "string.min": "Nama customer minimal 3 karakter",
         "string.max": "Nama customer maksimal 255 karakter",
     }),
-    customerEmail: Joi.string().email().optional().messages({
+    customerEmail: Joi.string().email().optional().allow("", null).messages({
         "string.email": "Format email tidak valid",
     }),
     customerPhone: Joi.string()
         .pattern(/^[0-9]{10,15}$/)
         .optional()
+        .allow("", null)
         .messages({
             "string.pattern.base": "Nomor telepon harus 10-15 digit angka",
         }),
-    customerAddress: Joi.string().min(10).max(500).optional().allow("").messages({
-        "string.min": "Alamat customer minimal 10 karakter",
-        "string.max": "Alamat customer maksimal 500 karakter",
+    customerAddress: Joi.string().min(10).max(500).optional().allow("", null).messages({
+        "string.min": "Alamat proyek minimal 10 karakter",
+        "string.max": "Alamat proyek maksimal 500 karakter",
     }),
-    budget: Joi.number().positive().optional().messages({
+    budget: Joi.number().positive().optional().allow(null).messages({
         "number.base": "Budget harus berupa angka",
         "number.positive": "Budget harus lebih dari 0",
     }),
-    startDate: Joi.date().optional().messages({
+    startDate: Joi.date().optional().allow(null).messages({
         "date.base": "Tanggal mulai harus berupa tanggal valid",
     }),
-    estimatedEndDate: Joi.date().optional().messages({
+    estimatedEndDate: Joi.date().optional().allow(null).messages({
         "date.base": "Estimasi tanggal selesai harus berupa tanggal valid",
     }),
     status: Joi.string()
@@ -102,11 +104,34 @@ const updateProjectSchema = Joi.object({
         .messages({
             "any.only": "Status harus 'pending', 'in_progress', 'on_hold', 'completed', atau 'cancelled'",
         }),
-    notes: Joi.string().max(5000).optional().allow("").messages({
+    notes: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Catatan maksimal 5000 karakter",
     }),
 }).min(1).messages({
     "object.min": "Minimal satu field harus diperbarui",
+});
+
+// ========================================
+// PROGRESS VALIDATION
+// ========================================
+const updateProgressSchema = Joi.object({
+    progress: Joi.number().min(0).max(100).required().messages({
+        "number.base": "Progress harus berupa angka",
+        "number.min": "Progress minimal 0",
+        "number.max": "Progress maksimal 100",
+        "any.required": "Progress wajib diisi",
+    }),
+});
+
+// ========================================
+// PHOTOS VALIDATION
+// ========================================
+const deletePhotoSchema = Joi.object({
+    url: Joi.string().uri().required().messages({
+        "string.empty": "URL foto tidak boleh kosong",
+        "string.uri": "URL foto harus berupa URL yang valid",
+        "any.required": "URL foto wajib diisi",
+    }),
 });
 
 // ========================================
@@ -116,4 +141,6 @@ const updateProjectSchema = Joi.object({
 module.exports = {
     createProjectSchema,
     updateProjectSchema,
+    updateProgressSchema,
+    deletePhotoSchema,
 };
