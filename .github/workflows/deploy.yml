@@ -1,0 +1,35 @@
+name: Deploy Microservices to VPS
+
+on:
+  push:
+    branches:
+      - main # Ubah ke 'master' jika branch utama Anda bernama master
+
+jobs:
+  deploy:
+    name: Deploy to CentOS VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executing remote SSH commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            echo "Memulai proses deployment otomatis..."
+
+            # Masuk ke folder project
+            cd /root/bangunan-berkah
+
+            # Tarik kode terbaru dari GitHub
+            git pull origin main
+
+            # Build ulang image yang ada perubahan kode dan jalankan di background
+            docker compose up -d --build
+
+            # Hapus sisa-sisa image Docker lama agar disk VPS tidak penuh
+            docker image prune -a -f
+
+            echo "Deployment berhasil diselesaikan!"
