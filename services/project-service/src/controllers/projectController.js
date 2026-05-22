@@ -5,7 +5,7 @@
 
 const projectService = require("../services/projectService");
 const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
-const { createProjectSchema, updateProjectSchema } = require("../utils/validation");
+const { createProjectSchema, updateProjectSchema, updateProgressSchema, deletePhotoSchema } = require("../utils/validation");
 const { logProjectActivity } = require("../services/activityLogger");
 
 /**
@@ -172,4 +172,118 @@ exports.getProjectProgress = asyncHandler(async (req, res) => {
     const progress = await projectService.getProjectProgress(projectCode);
 
     return sendSuccess(res, progress, "Project progress berhasil diambil");
+});
+
+/**
+ * UPDATE PROJECT PROGRESS (DIRECT)
+ * PATCH /api/projects/:projectCode/progress
+ */
+exports.updateProjectProgress = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
+    const value = await validate(updateProgressSchema, req.body);
+
+    const updatedProject = await projectService.updateProjectProgress(
+        projectCode,
+        value.progress
+    );
+
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "progress_updated",
+        description: `Project progress updated to ${value.progress}%`,
+        metadata: { progress: value.progress },
+    });
+
+    return sendSuccess(
+        res,
+        updatedProject,
+        `Progress project berhasil diperbarui menjadi ${value.progress}%`
+    );
+});
+
+/**
+ * UPLOAD PROJECT PHOTOS
+ * POST /api/projects/:projectCode/photos
+ */
+exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
+
+    if (!req.files || req.files.length === 0) {
+        throw new Error("Minimal satu foto harus diupload");
+    }
+
+    // Build photo URLs from uploaded files
+    const photoUrls = req.files.map(
+        (file) => `${req.protocol}://${req.get("host")}/uploads/photos/${file.filename}`
+    );
+
+    const updatedProject = await projectService.uploadProjectPhotos(
+        projectCode,
+        photoUrls
+    );
+
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "photos_uploaded",
+        description: `${req.files.length} foto dokumentasi diupload`,
+        metadata: { photoCount: req.files.length },
+    });
+
+    return sendCreated(
+        res,
+        {
+            uploadedPhotos: photoUrls,
+            totalPhotos: updatedProject.photos?.length || 0,
+            project: updatedProject,
+        },
+        `${req.files.length} foto berhasil diupload`
+    );
+});
+
+/**
+ * GET PROJECT PHOTOS
+ * GET /api/projects/:projectCode/photos
+ */
+exports.getProjectPhotos = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
+
+    const photos = await projectService.getProjectPhotos(projectCode);
+
+    return sendSuccess(
+        res,
+        { photos, total: photos.length },
+        "Foto dokumentasi berhasil diambil"
+    );
+});
+
+/**
+ * DELETE PROJECT PHOTO
+ * DELETE /api/projects/:projectCode/photos
+ */
+exports.deleteProjectPhoto = asyncHandler(async (req, res) => {
+    const { projectCode } = req.params;
+    const value = await validate(deletePhotoSchema, req.body);
+
+    const updatedProject = await projectService.deleteProjectPhoto(
+        projectCode,
+        value.url
+    );
+
+    // Log activity
+    await logProjectActivity(projectCode, {
+        userId: req.user.id.toString(),
+        userName: req.user.name || req.user.email,
+        action: "photo_deleted",
+        description: `Foto dokumentasi dihapus`,
+    });
+
+    return sendSuccess(
+        res,
+        updatedProject,
+        "Foto berhasil dihapus"
+    );
 });

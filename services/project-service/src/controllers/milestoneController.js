@@ -1,6 +1,8 @@
 /**
  * Milestone Controller (Refactored)
  * Handles milestone-related HTTP requests using services
+ * NOTE: Milestone CRUD no longer returns projectProgress.
+ *       Project progress is managed separately via the progress endpoint.
  */
 
 const milestoneService = require("../services/milestoneService");
@@ -38,7 +40,6 @@ exports.addMilestone = asyncHandler(async (req, res) => {
         res,
         {
             milestone: result.milestone,
-            projectProgress: result.projectProgress,
         },
         "Milestone berhasil ditambahkan"
     );
@@ -79,7 +80,6 @@ exports.updateMilestone = asyncHandler(async (req, res) => {
         res,
         {
             milestone: result.milestone,
-            projectProgress: result.projectProgress,
         },
         "Milestone berhasil diperbarui"
     );
@@ -92,7 +92,7 @@ exports.updateMilestone = asyncHandler(async (req, res) => {
 exports.deleteMilestone = asyncHandler(async (req, res) => {
     const { projectCode, milestoneId } = req.params;
 
-    const result = await milestoneService.deleteMilestone(projectCode, milestoneId);
+    await milestoneService.deleteMilestone(projectCode, milestoneId);
 
     // Log activity
     await logProjectActivity(projectCode, {
@@ -104,9 +104,7 @@ exports.deleteMilestone = asyncHandler(async (req, res) => {
 
     return sendSuccess(
         res,
-        {
-            projectProgress: result.projectProgress,
-        },
+        null,
         "Milestone berhasil dihapus"
     );
 });

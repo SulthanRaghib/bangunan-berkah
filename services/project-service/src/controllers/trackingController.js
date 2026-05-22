@@ -36,6 +36,7 @@ exports.getProjectSummary = asyncHandler(async (req, res) => {
             projectType: tracking.projectType,
             status: tracking.status,
             progress: tracking.progress,
+            photos: tracking.photos || [],
             startDate: tracking.startDate,
             estimatedEndDate: tracking.estimatedEndDate,
             actualEndDate: tracking.actualEndDate,
