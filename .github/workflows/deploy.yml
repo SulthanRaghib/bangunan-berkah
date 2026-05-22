@@ -24,7 +24,7 @@ jobs:
             cd /root/bangunan-berkah
 
             # Tarik kode terbaru dari GitHub
-            git pull origin main
+            git pull origin master
 
             # Build ulang image yang ada perubahan kode dan jalankan di background
             docker compose up -d --build
