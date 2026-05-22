@@ -54,18 +54,18 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 // ========================================
+// ADMIN ROUTES (auth + admin role required) - MUST come before public routes
+// ========================================
+app.use("/api/reviews/admin", reviewAdminRoutes);
+app.use("/api/testimonials/admin", testimonialAdminRoutes);
+app.use("/api/qa/admin", qaAdminRoutes);
+
+// ========================================
 // PUBLIC ROUTES (no auth required)
 // ========================================
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/qa", qaRoutes);
-
-// ========================================
-// ADMIN ROUTES (auth + admin role required)
-// ========================================
-app.use("/api/reviews/admin", reviewAdminRoutes);
-app.use("/api/testimonials/admin", testimonialAdminRoutes);
-app.use("/api/qa/admin", qaAdminRoutes);
 
 // Health Check
 app.get("/health", (req, res) => {
