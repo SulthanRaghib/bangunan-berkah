@@ -3,7 +3,7 @@ name: Deploy Microservices to VPS
 on:
   push:
     branches:
-      - main # Ubah ke 'master' jika branch utama Anda bernama master
+      - master # Trigger deployment on push to master branch
 
 jobs:
   deploy:
