@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Project Service API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Layanan Manajemen Proyek Konstruksi untuk PT Solusi Bangunan Berkah.
 
@@ -9,14 +9,23 @@ info:
     - CRUD proyek konstruksi dengan tracking progress
     - Milestone management per proyek
     - Document upload (kontrak, proposal, spesifikasi)
+    - Foto dokumentasi proyek
+    - Direct progress update (tanpa akumulasi dari milestone)
     - Public tracking untuk klien via project code
     - Dashboard statistik proyek
 
+    ## Tipe Proyek
+    | Tipe | Deskripsi |
+    |------|-----------|
+    | konstruksi | Proyek konstruksi bangunan |
+    | furniture | Proyek pembuatan furniture |
+    | design_and_build | Proyek desain dan pembangunan |
+
     ## Aturan Akses
     | Level | Contoh Endpoint |
-    |-------|-----------------|
+    |-------|-----------------| 
     | ✅ Public | GET /api/projects/track/:code, GET /api/projects/summary/:code |
-    | 🔐 Admin | Semua CRUD, milestone, documents, dashboard |
+    | 🔐 Admin | Semua CRUD, milestone, documents, photos, progress, dashboard |
 
     ## Test Credentials
     | Role | Email | Password |
@@ -42,22 +51,23 @@ components:
   schemas:
     Project:
       type: object
-      required: [projectCode, projectName, customerName]
+      required: [projectCode, projectName, customerName, customerAddress, projectType]
       properties:
         _id: { type: string }
         projectCode: { type: string, example: "PRJ-2025-001" }
         projectName: { type: string, example: "Pembangunan Rumah Tipe 45" }
         description: { type: string }
-        projectType: { type: string, enum: [konstruksi, furniture] }
+        projectType: { type: string, enum: [konstruksi, furniture, design_and_build] }
         customerName: { type: string }
         customerEmail: { type: string, format: email }
         customerPhone: { type: string }
         customerAddress: { type: string }
         startDate: { type: string, format: date }
         estimatedEndDate: { type: string, format: date }
-        status: { type: string, enum: [planning, in_progress, completed, on_hold, cancelled] }
+        status: { type: string, enum: [pending, in_progress, completed, on_hold, cancelled] }
         budget: { type: number }
         progress: { type: number, minimum: 0, maximum: 100 }
+        photos: { type: array, items: { type: string }, description: "Array of documentation photo URLs" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     Milestone:
@@ -81,6 +91,10 @@ tags:
     description: Endpoint publik untuk klien tracking proyek
   - name: "Projects (Admin)"
     description: Manajemen proyek (Admin only)
+  - name: "Progress (Admin)"
+    description: Update progress proyek langsung (Admin only)
+  - name: "Photos (Admin)"
+    description: Foto dokumentasi proyek (Admin only)
   - name: "Milestones (Admin)"
     description: Manajemen milestone proyek (Admin only)
   - name: "Documents (Admin)"
@@ -118,7 +132,8 @@ paths:
       parameters:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
         - { in: query, name: limit, schema: { type: integer, default: 10 } }
-        - { in: query, name: status, schema: { type: string, enum: [planning, in_progress, completed, on_hold, cancelled] } }
+        - { in: query, name: status, schema: { type: string, enum: [pending, in_progress, completed, on_hold, cancelled] } }
+        - { in: query, name: projectType, schema: { type: string, enum: [konstruksi, furniture, design_and_build] } }
         - { in: query, name: search, schema: { type: string }, description: "Cari nama/kode proyek" }
       responses:
         "200": { description: Daftar proyek }
@@ -133,18 +148,19 @@ paths:
           application/json:
             schema:
               type: object
-              required: [projectName, projectType, customerName, customerEmail, customerPhone, startDate, estimatedEndDate]
+              required: [projectName, projectType, customerName, customerAddress]
               properties:
                 projectName: { type: string, example: "Pembangunan Rumah Tipe 45" }
                 description: { type: string }
-                projectType: { type: string, enum: [konstruksi, furniture] }
+                projectType: { type: string, enum: [konstruksi, furniture, design_and_build] }
                 customerName: { type: string, example: "Budi Santoso" }
                 customerEmail: { type: string, format: email }
                 customerPhone: { type: string, example: "081234567890" }
-                customerAddress: { type: string }
+                customerAddress: { type: string, example: "Jl. Merdeka No. 1, Jakarta" }
                 startDate: { type: string, format: date, example: "2025-01-15" }
                 estimatedEndDate: { type: string, format: date, example: "2025-06-15" }
                 budget: { type: number, example: 500000000 }
+                progress: { type: number, minimum: 0, maximum: 100, default: 0 }
                 notes: { type: string }
       responses:
         "201": { description: Proyek berhasil dibuat }
@@ -173,7 +189,7 @@ paths:
               type: object
               properties:
                 projectName: { type: string }
-                projectType: { type: string, enum: [konstruksi, furniture] }
+                projectType: { type: string, enum: [konstruksi, furniture, design_and_build] }
                 customerName: { type: string }
                 customerEmail: { type: string, format: email }
                 customerPhone: { type: string }
@@ -211,9 +227,94 @@ paths:
               type: object
               required: [status]
               properties:
-                status: { type: string, enum: [planning, in_progress, completed, on_hold, cancelled] }
+                status: { type: string, enum: [pending, in_progress, completed, on_hold, cancelled] }
       responses:
         "200": { description: Status berhasil diubah }
+        "404": { description: Proyek tidak ditemukan }
+  # ═══════════ PROGRESS (DIRECT UPDATE) ═══════════
+  /api/projects/{projectCode}/progress:
+    get:
+      summary: Get progress proyek (Admin)
+      tags: ["Progress (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Data progress proyek }
+        "404": { description: Proyek tidak ditemukan }
+    patch:
+      summary: Update progress proyek langsung (Admin)
+      description: |
+        Update progress proyek secara langsung (0-100%).
+        Progress TIDAK dihitung dari akumulasi milestone.
+      tags: ["Progress (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [progress]
+              properties:
+                progress: { type: number, minimum: 0, maximum: 100, example: 65 }
+      responses:
+        "200": { description: Progress berhasil diperbarui }
+        "400": { description: Validasi gagal (progress harus 0-100) }
+        "404": { description: Proyek tidak ditemukan }
+  # ═══════════ PHOTOS (PROJECT DOCUMENTATION) ═══════════
+  /api/projects/{projectCode}/photos:
+    post:
+      summary: Upload foto dokumentasi proyek (Admin)
+      description: Upload satu atau lebih foto dokumentasi proyek (max 10 file).
+      tags: ["Photos (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [photos]
+              properties:
+                photos:
+                  type: array
+                  items: { type: string, format: binary }
+                  maxItems: 10
+      responses:
+        "201": { description: Foto berhasil diupload }
+        "400": { description: Minimal satu foto harus diupload }
+        "404": { description: Proyek tidak ditemukan }
+    get:
+      summary: Daftar foto dokumentasi proyek (Admin)
+      tags: ["Photos (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Daftar foto proyek }
+        "404": { description: Proyek tidak ditemukan }
+    delete:
+      summary: Hapus foto dokumentasi proyek (Admin)
+      tags: ["Photos (Admin)"]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: projectCode, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri, example: "http://localhost:8004/uploads/photos/photo-123.jpg" }
+      responses:
+        "200": { description: Foto berhasil dihapus }
         "404": { description: Proyek tidak ditemukan }
   # ═══════════ MILESTONES ═══════════
   /api/projects/{projectCode}/milestones:
@@ -227,6 +328,9 @@ paths:
         "200": { description: Daftar milestone }
     post:
       summary: Tambah milestone (Admin)
+      description: |
+        Menambah milestone ke proyek. Milestone progress bersifat independen
+        dan TIDAK mempengaruhi progress proyek secara keseluruhan.
       tags: ["Milestones (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:

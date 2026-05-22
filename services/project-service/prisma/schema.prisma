@@ -17,38 +17,39 @@ model Project {
     // Project Identifier (Customer akan pakai ini untuk tracking)
     projectCode String @unique // contoh: PRJ-2025-0001
 
-    // Project Info
+    // Project Info (REQUIRED: projectName, projectType)
     projectName String
     description String?
-    projectType String // "konstruksi" atau "furniture"
+    projectType String // "konstruksi", "furniture", atau "design_and_build"
 
-    // Customer Info
+    // Customer Info (REQUIRED: customerName, customerAddress)
     customerName    String
-    customerEmail   String
-    customerPhone   String
-    customerAddress String
+    customerEmail   String?
+    customerPhone   String?
+    customerAddress String // Alamat proyek / lokasi proyek
 
     // Budget & Financial
     budget     Float?
-    actualCost Float  @default(0)
+    actualCost Float? @default(0)
 
-    // Timeline
-    startDate        DateTime
-    estimatedEndDate DateTime
+    // Timeline (optional)
+    startDate        DateTime?
+    estimatedEndDate DateTime?
     actualEndDate    DateTime?
 
-    // Status & Progress
+    // Status & Progress (REQUIRED: status)
     status String @default("pending") // pending, in_progress, on_hold, completed, cancelled
 
-    progress Float @default(0) // 0-100% (synced from milestone progress)
+    progress Float @default(0) // 0-100% (direct update, NOT synced from milestones)
 
     // Documentation
     contractDocument String? // URL to contract file
     notes            String?
+    photos           String[] // Array of project documentation photo URLs
 
-    // Admin Info
-    createdBy     String // Admin user ID dari auth-service
-    createdByName String // Admin name
+    // Admin Info (optional)
+    createdBy     String? // Admin user ID dari auth-service
+    createdByName String? // Admin name
 
     // Timestamps
     createdAt DateTime @default(now())

@@ -91,6 +91,9 @@ redisClient.connect().catch((error) => {
   console.error("Gagal koneksi Redis di API Gateway:", error.message);
 });
 
+// Disable rate limiting in development for easier testing
+const DISABLE_RATE_LIMITING = process.env.DISABLE_RATE_LIMITING === "true" || process.env.NODE_ENV === "development";
+
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
   max: Number(process.env.RATE_LIMIT_MAX || 100),
@@ -101,16 +104,17 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   passOnStoreError: true,
-  store: new RedisStore({
-    sendCommand: (...args) => redisClient.sendCommand(args),
-    prefix: "rl:api-gateway:",
-  }),
   skip: (req) =>
+    DISABLE_RATE_LIMITING ||
     req.path.startsWith("/health") ||
     req.path.startsWith("/docs") ||
     req.path.startsWith("/api/auth/login") ||
     req.path.startsWith("/api/auth/refresh") ||
     req.path.startsWith("/api/auth/register"),
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.sendCommand(args),
+    prefix: "rl:api-gateway:",
+  }),
 });
 
 const strictAuthLimiter = rateLimit({
@@ -123,15 +127,18 @@ const strictAuthLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   passOnStoreError: false,
+  skip: () => DISABLE_RATE_LIMITING,
   store: new RedisStore({
     sendCommand: (...args) => redisClient.sendCommand(args),
     prefix: "rl:api-gateway:auth:",
   }),
 });
 
-app.use("/api/auth/login", strictAuthLimiter);
-app.use("/api/auth/refresh", strictAuthLimiter);
-app.use("/api/auth/register", strictAuthLimiter);
+if (!DISABLE_RATE_LIMITING) {
+  app.use("/api/auth/login", strictAuthLimiter);
+  app.use("/api/auth/refresh", strictAuthLimiter);
+  app.use("/api/auth/register", strictAuthLimiter);
+}
 app.use("/api", limiter);
 
 // ========================================
