@@ -1,0 +1,19 @@
+# ============================================
+# MOCHA CONFIGURATION
+# ============================================
+# Black-box integration test configuration
+# Tests run against API Gateway (port 8080)
+
+require:
+  - ./helpers/setup.js
+
+spec:
+  - "auth-service/**/*.test.js"
+  - "product-service/**/*.test.js"
+  - "project-service/**/*.test.js"
+  - "review-service/**/*.test.js"
+  - "chat-service/**/*.test.js"
+
+timeout: 15000
+recursive: true
+exit: true

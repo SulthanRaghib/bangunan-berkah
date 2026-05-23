@@ -1,0 +1,19 @@
+{
+  "name": "bangunan-berkah-tests",
+  "version": "1.0.0",
+  "description": "Black-box integration tests for PT Solusi Bangunan Berkah Microservices",
+  "private": true,
+  "scripts": {
+    "test": "mocha --config .mocharc.yml",
+    "test:auth": "mocha --config .mocharc.yml \"auth-service/**/*.test.js\"",
+    "test:product": "mocha --config .mocharc.yml \"product-service/**/*.test.js\"",
+    "test:project": "mocha --config .mocharc.yml \"project-service/**/*.test.js\"",
+    "test:review": "mocha --config .mocharc.yml \"review-service/**/*.test.js\"",
+    "test:chat": "mocha --config .mocharc.yml \"chat-service/**/*.test.js\""
+  },
+  "dependencies": {
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
+    "supertest": "^6.3.3"
+  }
+}
