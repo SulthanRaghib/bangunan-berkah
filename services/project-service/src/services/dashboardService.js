@@ -127,7 +127,10 @@ class DashboardService {
                 milestones: {
                     total: milestones.length,
                     completed: milestones.filter(
-                        (m) => m.status === "completed"
+                        (m) => {
+                            const s = (m.status || "").toUpperCase();
+                            return s === "COMPLETED" || s === "SELESAI";
+                        }
                     ).length,
                     list: milestones
                         .slice(-5)
@@ -184,7 +187,10 @@ class DashboardService {
                 stats: {
                     totalMilestones: milestones.length,
                     completedMilestones: milestones.filter(
-                        (m) => m.status === "completed"
+                        (m) => {
+                            const s = (m.status || "").toUpperCase();
+                            return s === "COMPLETED" || s === "SELESAI";
+                        }
                     ).length,
                     progressPercentage: project.progress,
                     totalDocuments: documents.length,

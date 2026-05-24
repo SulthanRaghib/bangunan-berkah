@@ -16,9 +16,7 @@ router.put("/:projectCode", projectController.updateProject);
 router.delete("/:projectCode", projectController.deleteProject);
 router.patch("/:projectCode/status", projectController.updateProjectStatus);
 
-// Progress — direct update (NOT accumulated from milestones)
-router.get("/:projectCode/progress", projectController.getProjectProgress);
-router.patch("/:projectCode/progress", projectController.updateProjectProgress);
+
 
 // Photos — project documentation photos
 router.post("/:projectCode/photos", upload.array("photos", 10), projectController.uploadProjectPhotos);

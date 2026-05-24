@@ -8,6 +8,7 @@
 const { v4: uuidv4 } = require("uuid");
 const projectRepository = require("../repositories/projectRepository");
 const { ValidationError, AppError, NotFoundError } = require("../utils/errors");
+const { normalizeMilestoneStatus, getMilestoneProgressFromStatus } = require("../utils/milestoneHelper");
 
 class MilestoneService {
     /**
@@ -15,14 +16,6 @@ class MilestoneService {
      */
     async addMilestone(projectCode, milestoneData) {
         try {
-            // Validate progress
-            if (
-                milestoneData.progress < 0 ||
-                milestoneData.progress > 100
-            ) {
-                throw new ValidationError("Progress harus antara 0 dan 100");
-            }
-
             // Get project to verify existence
             const project = await projectRepository.findByCodeOptional(
                 projectCode
@@ -30,6 +23,9 @@ class MilestoneService {
             if (!project) {
                 throw new NotFoundError("Project");
             }
+
+            const status = normalizeMilestoneStatus(milestoneData.status || "PENDING");
+            const progress = getMilestoneProgressFromStatus(status);
 
             const milestone = {
                 id: uuidv4(),
@@ -39,10 +35,10 @@ class MilestoneService {
                     milestoneData.detail ||
                     "",
                 targetDate: new Date(milestoneData.targetDate),
-                status: milestoneData.status || "PENDING",
-                progress: parseInt(milestoneData.progress) || 0,
-                actualCompletionDate: milestoneData.actualCompletionDate
-                    ? new Date(milestoneData.actualCompletionDate)
+                status,
+                progress,
+                actualCompletionDate: status === "COMPLETED"
+                    ? (milestoneData.actualCompletionDate ? new Date(milestoneData.actualCompletionDate) : new Date())
                     : null,
                 photos: milestoneData.photos || [],
                 createdAt: new Date(),
@@ -71,14 +67,6 @@ class MilestoneService {
         milestoneData
     ) {
         try {
-            // Validate progress
-            if (
-                milestoneData.progress !== undefined &&
-                (milestoneData.progress < 0 || milestoneData.progress > 100)
-            ) {
-                throw new ValidationError("Progress harus antara 0 dan 100");
-            }
-
             // Get project
             const project = await projectRepository.findByCodeOptional(
                 projectCode
@@ -95,6 +83,22 @@ class MilestoneService {
                 throw new NotFoundError("Milestone");
             }
 
+            const status = normalizeMilestoneStatus(milestoneData.status || milestone.status);
+            const progress = getMilestoneProgressFromStatus(status);
+
+            let actualCompletionDate = null;
+            if (status === "COMPLETED") {
+                if (normalizeMilestoneStatus(milestone.status) !== "COMPLETED") {
+                    actualCompletionDate = milestoneData.actualCompletionDate
+                        ? new Date(milestoneData.actualCompletionDate)
+                        : new Date();
+                } else {
+                    actualCompletionDate = milestoneData.actualCompletionDate
+                        ? new Date(milestoneData.actualCompletionDate)
+                        : milestone.actualCompletionDate;
+                }
+            }
+
             // Prepare update data
             const updatedMilestoneData = {
                 title:
@@ -108,14 +112,9 @@ class MilestoneService {
                 targetDate: milestoneData.targetDate
                     ? new Date(milestoneData.targetDate)
                     : milestone.targetDate,
-                status: milestoneData.status || milestone.status,
-                progress:
-                    milestoneData.progress !== undefined
-                        ? parseInt(milestoneData.progress)
-                        : milestone.progress,
-                actualCompletionDate: milestoneData.actualCompletionDate
-                    ? new Date(milestoneData.actualCompletionDate)
-                    : milestone.actualCompletionDate,
+                status,
+                progress,
+                actualCompletionDate,
             };
 
             // Update milestone

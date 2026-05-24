@@ -120,27 +120,7 @@ describe("Project Service — Admin Projects", function () {
             expect(res.body.success).to.be.true;
         });
 
-        it("harus berhasil membuat proyek dengan progress awal", async function () {
-            const token = await getAdminToken();
 
-            const res = await timeRequest(
-                request
-                    .post("/api/projects")
-                    .set("Authorization", `Bearer ${token}`)
-                    .send({
-                    projectName: "Proyek Dengan Progress Awal",
-                    projectType: "konstruksi",
-                    customerName: "Client Progress Test",
-                    customerAddress: "Jl. Progress No. 1, Semarang",
-                    progress: 25,
-                }),
-                'POST',
-                '/api/projects'
-            );
-
-            expect(res.status).to.be.oneOf([200, 201]);
-            expect(res.body.success).to.be.true;
-        });
 
         it("harus gagal membuat proyek tanpa token", async function () {
             const res = await timeRequest(
@@ -323,61 +303,87 @@ describe("Project Service — Admin Projects", function () {
     });
 
     // ========================================
-    // PATCH /api/projects/:projectCode/progress
+    // Milestone-Based Progress Synchronization Tests
     // ========================================
-    describe("PATCH /api/projects/:projectCode/progress", function () {
-        it("harus berhasil update progress proyek langsung", async function () {
+    describe("Milestone-Based Progress Synchronization", function () {
+        it("harus otomatis mengupdate progress proyek berdasarkan status milestone", async function () {
             if (!createdProjectCode) this.skip();
 
             const token = await getAdminToken();
 
-            const res = await timeRequest(
-                request
-                    .patch(`/api/projects/${createdProjectCode}/progress`)
-                    .set("Authorization", `Bearer ${token}`)
-                    .send({ progress: 45 }),
-                'PATCH',
-                `/api/projects/${createdProjectCode}/progress`
-            );
+            // 1. Create milestone 1 (PENDING)
+            const addRes1 = await request
+                .post(`/api/projects/${createdProjectCode}/milestones`)
+                .set("Authorization", `Bearer ${token}`)
+                .send({
+                    title: "Pondasi Awal",
+                    status: "PENDING",
+                    targetDate: new Date().toISOString()
+                });
+            expect(addRes1.status).to.be.oneOf([200, 201]);
+            const milestoneId1 = addRes1.body.data.milestone.id;
 
-            expect(res.status).to.equal(200);
-            expect(res.body.success).to.be.true;
-        });
+            // Check project progress (should be 0%)
+            const projRes1 = await request
+                .get(`/api/projects/${createdProjectCode}`)
+                .set("Authorization", `Bearer ${token}`);
+            expect(projRes1.body.data.progress).to.equal(0);
 
-        it("harus gagal update progress di luar range 0-100", async function () {
-            if (!createdProjectCode) this.skip();
+            // 2. Update milestone 1 to ON_PROGRESS / berjalan
+            const updateRes1 = await request
+                .patch(`/api/projects/${createdProjectCode}/milestones/${milestoneId1}`)
+                .set("Authorization", `Bearer ${token}`)
+                .send({
+                    status: "berjalan"
+                });
+            expect(updateRes1.status).to.equal(200);
 
-            const token = await getAdminToken();
+            // Check project progress (still 0% because 0/1 completed)
+            const projRes2 = await request
+                .get(`/api/projects/${createdProjectCode}`)
+                .set("Authorization", `Bearer ${token}`);
+            expect(projRes2.body.data.progress).to.equal(0);
 
-            const res = await timeRequest(
-                request
-                    .patch(`/api/projects/${createdProjectCode}/progress`)
-                    .set("Authorization", `Bearer ${token}`)
-                    .send({ progress: 150 }),
-                'PATCH',
-                `/api/projects/${createdProjectCode}/progress`
-            );
+            // 3. Update milestone 1 to selesai / COMPLETED
+            const updateRes2 = await request
+                .patch(`/api/projects/${createdProjectCode}/milestones/${milestoneId1}`)
+                .set("Authorization", `Bearer ${token}`)
+                .send({
+                    status: "selesai"
+                });
+            expect(updateRes2.status).to.equal(200);
 
-            expect(res.status).to.equal(400);
-            expect(res.body.success).to.be.false;
-        });
+            // Check project progress (should be 100% because 1/1 completed)
+            const projRes3 = await request
+                .get(`/api/projects/${createdProjectCode}`)
+                .set("Authorization", `Bearer ${token}`);
+            expect(projRes3.body.data.progress).to.equal(100);
 
-        it("harus gagal update progress tanpa field progress", async function () {
-            if (!createdProjectCode) this.skip();
+            // 4. Add milestone 2 (PENDING / menunggu)
+            const addRes2 = await request
+                .post(`/api/projects/${createdProjectCode}/milestones`)
+                .set("Authorization", `Bearer ${token}`)
+                .send({
+                    title: "Struktur Rangka",
+                    status: "menunggu",
+                    targetDate: new Date().toISOString()
+                });
+            expect(addRes2.status).to.be.oneOf([200, 201]);
+            const milestoneId2 = addRes2.body.data.milestone.id;
 
-            const token = await getAdminToken();
+            // Check project progress (should be 50% because 1/2 completed)
+            const projRes4 = await request
+                .get(`/api/projects/${createdProjectCode}`)
+                .set("Authorization", `Bearer ${token}`);
+            expect(projRes4.body.data.progress).to.equal(50);
 
-            const res = await timeRequest(
-                request
-                    .patch(`/api/projects/${createdProjectCode}/progress`)
-                    .set("Authorization", `Bearer ${token}`)
-                    .send({}),
-                'PATCH',
-                `/api/projects/${createdProjectCode}/progress`
-            );
-
-            expect(res.status).to.equal(400);
-            expect(res.body.success).to.be.false;
+            // Cleanup: Delete milestone 1 and 2
+            await request
+                .delete(`/api/projects/${createdProjectCode}/milestones/${milestoneId1}`)
+                .set("Authorization", `Bearer ${token}`);
+            await request
+                .delete(`/api/projects/${createdProjectCode}/milestones/${milestoneId2}`)
+                .set("Authorization", `Bearer ${token}`);
         });
     });
 

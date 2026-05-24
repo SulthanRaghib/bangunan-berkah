@@ -52,11 +52,6 @@ const createProjectSchema = Joi.object({
     notes: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Catatan maksimal 5000 karakter",
     }),
-    progress: Joi.number().min(0).max(100).optional().default(0).messages({
-        "number.base": "Progress harus berupa angka",
-        "number.min": "Progress minimal 0",
-        "number.max": "Progress maksimal 100",
-    }),
 });
 
 const updateProjectSchema = Joi.object({
@@ -112,18 +107,6 @@ const updateProjectSchema = Joi.object({
 });
 
 // ========================================
-// PROGRESS VALIDATION
-// ========================================
-const updateProgressSchema = Joi.object({
-    progress: Joi.number().min(0).max(100).required().messages({
-        "number.base": "Progress harus berupa angka",
-        "number.min": "Progress minimal 0",
-        "number.max": "Progress maksimal 100",
-        "any.required": "Progress wajib diisi",
-    }),
-});
-
-// ========================================
 // PHOTOS VALIDATION
 // ========================================
 const deletePhotoSchema = Joi.object({
@@ -141,6 +124,5 @@ const deletePhotoSchema = Joi.object({
 module.exports = {
     createProjectSchema,
     updateProjectSchema,
-    updateProgressSchema,
     deletePhotoSchema,
 };

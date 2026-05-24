@@ -29,7 +29,6 @@ class ProjectService {
                 startDate: projectData.startDate ? new Date(projectData.startDate) : null,
                 estimatedEndDate: projectData.estimatedEndDate ? new Date(projectData.estimatedEndDate) : null,
                 notes: projectData.notes || null,
-                progress: projectData.progress !== undefined ? parseFloat(projectData.progress) : 0,
                 photos: [],
                 createdBy: userId || null,
                 createdByName: userName || null,
@@ -105,24 +104,7 @@ class ProjectService {
         }
     }
 
-    /**
-     * Update project progress directly (0-100)
-     */
-    async updateProjectProgress(projectCode, progress) {
-        try {
-            const progressValue = parseFloat(progress);
 
-            if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
-                throw new ValidationError("Progress harus berupa angka antara 0 dan 100");
-            }
-
-            return await projectRepository.updateProject(projectCode, {
-                progress: progressValue,
-            });
-        } catch (error) {
-            throw error instanceof AppError ? error : new AppError(error.message, 500);
-        }
-    }
 
     /**
      * Upload project photos (documentation)
@@ -178,16 +160,7 @@ class ProjectService {
         }
     }
 
-    /**
-     * Get project progress
-     */
-    async getProjectProgress(projectCode) {
-        try {
-            return await projectRepository.getProjectProgress(projectCode);
-        } catch (error) {
-            throw error instanceof AppError ? error : new AppError(error.message, 500);
-        }
-    }
+
 
     /**
      * Check if project exists

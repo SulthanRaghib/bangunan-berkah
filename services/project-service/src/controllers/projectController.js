@@ -5,7 +5,7 @@
 
 const projectService = require("../services/projectService");
 const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
-const { createProjectSchema, updateProjectSchema, updateProgressSchema, deletePhotoSchema } = require("../utils/validation");
+const { createProjectSchema, updateProjectSchema, deletePhotoSchema } = require("../utils/validation");
 const { logProjectActivity } = require("../services/activityLogger");
 const cloudinaryService = require("../utils/cloudinary");
 
@@ -163,46 +163,7 @@ exports.updateProjectStatus = asyncHandler(async (req, res) => {
     );
 });
 
-/**
- * GET PROJECT PROGRESS
- * GET /api/projects/:projectCode/progress
- */
-exports.getProjectProgress = asyncHandler(async (req, res) => {
-    const { projectCode } = req.params;
 
-    const progress = await projectService.getProjectProgress(projectCode);
-
-    return sendSuccess(res, progress, "Project progress berhasil diambil");
-});
-
-/**
- * UPDATE PROJECT PROGRESS (DIRECT)
- * PATCH /api/projects/:projectCode/progress
- */
-exports.updateProjectProgress = asyncHandler(async (req, res) => {
-    const { projectCode } = req.params;
-    const value = await validate(updateProgressSchema, req.body);
-
-    const updatedProject = await projectService.updateProjectProgress(
-        projectCode,
-        value.progress
-    );
-
-    // Log activity
-    await logProjectActivity(projectCode, {
-        userId: req.user.id.toString(),
-        userName: req.user.name || req.user.email,
-        action: "progress_updated",
-        description: `Project progress updated to ${value.progress}%`,
-        metadata: { progress: value.progress },
-    });
-
-    return sendSuccess(
-        res,
-        updatedProject,
-        `Progress project berhasil diperbarui menjadi ${value.progress}%`
-    );
-});
 
 /**
  * UPLOAD PROJECT PHOTOS

@@ -20,7 +20,7 @@ class ProjectRepository extends BaseRepository {
             const success = await this.insertOne({
                 ...projectData,
                 status: "pending",
-                progress: projectData.progress || 0,
+                progress: 0,
                 photos: projectData.photos || [],
                 milestones: [],
                 reports: [],
@@ -132,7 +132,6 @@ class ProjectRepository extends BaseRepository {
             "startDate",
             "estimatedEndDate",
             "status",
-            "progress",
             "notes",
             "photos",
         ];
@@ -151,9 +150,6 @@ class ProjectRepository extends BaseRepository {
                     value = new Date(value);
                 }
                 if (field === "budget" && value) {
-                    value = parseFloat(value);
-                }
-                if (field === "progress" && value !== undefined) {
                     value = parseFloat(value);
                 }
                 filteredData[field] = value;
@@ -297,6 +293,9 @@ class ProjectRepository extends BaseRepository {
             throw new NotFoundError("Project");
         }
 
+        // Recalculate project progress
+        await this.recalculateProgress(projectCode);
+
         return result.nModified > 0;
     }
 
@@ -343,6 +342,9 @@ class ProjectRepository extends BaseRepository {
             throw new AppError("Gagal mengupdate milestone", 500);
         }
 
+        // Recalculate project progress
+        await this.recalculateProgress(projectCode);
+
         return result.nModified > 0;
     }
 
@@ -367,6 +369,9 @@ class ProjectRepository extends BaseRepository {
         if (result.n === 0) {
             throw new NotFoundError("Project");
         }
+
+        // Recalculate project progress
+        await this.recalculateProgress(projectCode);
 
         return result.nModified > 0;
     }
@@ -483,24 +488,28 @@ class ProjectRepository extends BaseRepository {
     }
 
     /**
-     * Get project progress (direct from project field, NOT accumulated from milestones)
+     * Recalculate project progress based on milestones
      */
-    async getProjectProgress(projectCode) {
+    async recalculateProgress(projectCode) {
         const project = await this.findOne({ projectCode });
 
         if (!project) {
-            throw new NotFoundError("Project");
+            return;
         }
 
         const milestones = project.milestones || [];
+        const total = milestones.length;
 
-        return {
-            projectCode,
-            progress: project.progress || 0,
-            milestoneCount: milestones.length,
-            completedCount: milestones.filter((m) => m.status === "completed" || m.status === "COMPLETED")
-                .length,
-        };
+        let progress = 0;
+        if (total > 0) {
+            const completed = milestones.filter((m) => {
+                const s = (m.status || "").toUpperCase();
+                return s === "COMPLETED" || s === "SELESAI";
+            }).length;
+            progress = Math.round((completed / total) * 100);
+        }
+
+        await this.updateOne({ projectCode }, { progress });
     }
 
     /**

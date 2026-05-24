@@ -231,39 +231,7 @@ paths:
       responses:
         "200": { description: Status berhasil diubah }
         "404": { description: Proyek tidak ditemukan }
-  # ═══════════ PROGRESS (DIRECT UPDATE) ═══════════
-  /api/projects/{projectCode}/progress:
-    get:
-      summary: Get progress proyek (Admin)
-      tags: ["Progress (Admin)"]
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - { in: path, name: projectCode, required: true, schema: { type: string } }
-      responses:
-        "200": { description: Data progress proyek }
-        "404": { description: Proyek tidak ditemukan }
-    patch:
-      summary: Update progress proyek langsung (Admin)
-      description: |
-        Update progress proyek secara langsung (0-100%).
-        Progress TIDAK dihitung dari akumulasi milestone.
-      tags: ["Progress (Admin)"]
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - { in: path, name: projectCode, required: true, schema: { type: string } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [progress]
-              properties:
-                progress: { type: number, minimum: 0, maximum: 100, example: 65 }
-      responses:
-        "200": { description: Progress berhasil diperbarui }
-        "400": { description: Validasi gagal (progress harus 0-100) }
-        "404": { description: Proyek tidak ditemukan }
+
   # ═══════════ PHOTOS (PROJECT DOCUMENTATION) ═══════════
   /api/projects/{projectCode}/photos:
     post:
