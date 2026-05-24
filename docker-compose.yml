@@ -196,6 +196,11 @@ services:
       - ./services/project-service:/app
       - ./shared:/shared
       - /app/node_modules
+      # Persistent uploads — owned by host, writable inside container
+      - ./services/project-service/uploads:/app/uploads
+    # Override USER to root so uploads dir is always writable
+    # (Dockerfile uses USER node, but bind mount creates dirs as root)
+    user: "root"
     depends_on:
       mongodb:
         condition: service_healthy

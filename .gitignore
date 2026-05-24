@@ -39,3 +39,8 @@ Thumbs.db
 .idea/
 *.swp
 
+# === Uploads (keep dirs, ignore files) ===
+**/uploads/**
+!**/uploads/**/
+!**/uploads/**/.gitkeep
+
