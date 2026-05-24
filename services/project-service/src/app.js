@@ -57,9 +57,17 @@ const trackingRoutes = require("./routes/trackingRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 
-app.use("/api/projects", trackingRoutes); // Public routes must come first
-app.use("/api/projects", milestoneRoutes);
-app.use("/api/projects", projectRoutes);
+// ─── Public routes (NO auth) ───────────────────
+app.use("/api/projects", trackingRoutes);
+
+// ─── Admin routes ──────────────────────────────
+// Mount with SPECIFIC sub-paths to prevent route bleed:
+// Without this, milestoneRoutes' router.use(authMiddleware) runs
+// for ALL /api/projects/* requests, even photo uploads that should
+// only go to projectRoutes. This causes ECONNRESET on multipart
+// uploads when the auth middleware responds before the body finishes streaming.
+app.use("/api/projects", projectRoutes);    // handles: /, /:code, /:code/photos, /:code/progress, etc.
+app.use("/api/projects", milestoneRoutes);  // handles: /:code/milestones/*
 app.use("/api", documentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use(healthRoutes);

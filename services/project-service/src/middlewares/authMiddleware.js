@@ -29,12 +29,54 @@ const shouldFailClosedForEndpoint = (req) => {
     return failClosedPaths.some((path) => endpointPath.startsWith(path));
 };
 
+/**
+ * Helper: drain request body before sending error response.
+ * When a proxy streams a multipart body to this service and middleware
+ * sends a response BEFORE the body is fully received, the proxy gets
+ * ECONNRESET because the server closes the connection while data is
+ * still being written. This drains the remaining body first.
+ */
+const drainAndRespond = (req, res, statusCode, body) => {
+    // If request is already fully received, respond immediately
+    if (req.complete) {
+        return res.status(statusCode).json(body);
+    }
+
+    // Drain remaining body data to prevent ECONNRESET
+    req.resume();
+    req.on("end", () => {
+        res.status(statusCode).json(body);
+    });
+    req.on("error", () => {
+        // If stream errors during drain, still send response
+        if (!res.headersSent) {
+            res.status(statusCode).json(body);
+        }
+    });
+};
+
 const authMiddleware = async (req, res, next) => {
     try {
+        // ── FAST PATH: Trust API Gateway headers ──────────────
+        // If the request comes through the API Gateway, it already verified
+        // the JWT and injected x-user-* headers. Trust these headers to
+        // avoid duplicate JWT verification and Redis blacklist checks.
+        // This is critical for multipart uploads — re-checking Redis while
+        // the body is still streaming can cause ECONNRESET.
+        if (req.headers["x-user-id"] && req.headers["x-user-email"] && req.headers["x-user-role"]) {
+            req.user = {
+                id: req.headers["x-user-id"],
+                email: req.headers["x-user-email"],
+                role: req.headers["x-user-role"],
+            };
+            return next();
+        }
+
+        // ── FALLBACK: Direct access (not through gateway) ────
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({
+            return drainAndRespond(req, res, 401, {
                 success: false,
                 message: "Token tidak tersedia",
             });
@@ -46,7 +88,7 @@ const authMiddleware = async (req, res, next) => {
             const blacklisted = await isAccessTokenBlacklisted(token);
 
             if (blacklisted) {
-                return res.status(401).json({
+                return drainAndRespond(req, res, 401, {
                     success: false,
                     message: "Token sudah tidak berlaku. Silakan login kembali",
                 });
@@ -55,7 +97,7 @@ const authMiddleware = async (req, res, next) => {
             const strictMode = shouldFailClosedForEndpoint(req);
 
             if (strictMode) {
-                return res.status(503).json({
+                return drainAndRespond(req, res, 503, {
                     success: false,
                     message: "Layanan autentikasi sementara tidak tersedia",
                 });
@@ -68,9 +110,9 @@ const authMiddleware = async (req, res, next) => {
         next();
     } catch (err) {
         if (err.name === "TokenExpiredError") {
-            return res.status(401).json({ success: false, message: "Token kedaluwarsa" });
+            return drainAndRespond(req, res, 401, { success: false, message: "Token kedaluwarsa" });
         }
-        return res.status(401).json({ success: false, message: "Token tidak valid" });
+        return drainAndRespond(req, res, 401, { success: false, message: "Token tidak valid" });
     }
 };
 

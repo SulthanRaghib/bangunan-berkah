@@ -38,6 +38,23 @@ const errorHandler = (err, req, res, next) => {
         stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
 
+    // Handle Multer file upload errors
+    if (err.name === "MulterError") {
+        const multerMessages = {
+            LIMIT_FILE_SIZE: "Ukuran file melebihi batas (max 10MB per file)",
+            LIMIT_FILE_COUNT: "Jumlah file melebihi batas",
+            LIMIT_UNEXPECTED_FILE: "Field name tidak sesuai. Gunakan 'photos' untuk upload foto",
+            LIMIT_FIELD_KEY: "Nama field terlalu panjang",
+            LIMIT_FIELD_VALUE: "Nilai field terlalu panjang",
+            LIMIT_FIELD_COUNT: "Terlalu banyak field",
+            LIMIT_PART_COUNT: "Terlalu banyak bagian dalam multipart",
+        };
+        return res.status(400).json({
+            success: false,
+            message: multerMessages[err.code] || `Upload error: ${err.message}`,
+        });
+    }
+
     // Handle Joi validation errors
     if (err.name === "ValidationError" && err.details) {
         return res.status(400).json({
