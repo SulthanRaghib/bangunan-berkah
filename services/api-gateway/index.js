@@ -224,6 +224,9 @@ app.use(createProxy("/api/chat", CHAT_SERVICE_URL));
 app.use(createProxy(["/api/projects", "/api/dashboard", "/api/milestones"], PROJECT_SERVICE_URL));
 app.use(createProxy(["/api/reviews", "/api/testimonials", "/api/qa"], REVIEW_SERVICE_URL));
 
+// Static uploads — proxy to project-service so photos are accessible via gateway URL
+app.use(createProxy("/uploads", PROJECT_SERVICE_URL));
+
 // ========================================
 // HEALTH CHECK
 // ========================================

@@ -234,9 +234,11 @@ exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
     // ── Optimize images (compress & resize) ──────────
     const optimizationResults = await optimizeUploadedFiles(req.files);
 
-    // Build photo URLs from uploaded files
+    // Build photo URLs using public-facing host (via API Gateway proxy headers)
+    const publicHost = req.get("x-forwarded-host") || req.get("host");
+    const publicProto = req.get("x-forwarded-proto") || req.protocol;
     const photoUrls = req.files.map(
-        (file) => `${req.protocol}://${req.get("host")}/uploads/photos/${file.filename}`
+        (file) => `${publicProto}://${publicHost}/uploads/photos/${file.filename}`
     );
 
     const updatedProject = await projectService.uploadProjectPhotos(
