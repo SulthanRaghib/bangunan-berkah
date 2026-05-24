@@ -26,10 +26,7 @@ function isConfigured() {
     );
 }
 
-/**
- * Generate a timestamped filename/public_id
- */
-function generatePublicId(originalName) {
+function generatePublicId(index = null) {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, "0");
 
@@ -43,20 +40,17 @@ function generatePublicId(originalName) {
         pad(now.getSeconds()),
     ].join("");
 
-    const baseName = originalName
-        .replace(/\.[^.]+$/, "")
-        .replace(/[^a-zA-Z0-9_-]/g, "_")
-        .replace(/_+/g, "_")
-        .substring(0, 50);
+    // Generate a random 4-character string to prevent collisions
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    
+    // Build publicId: YYYYMMDD_HHmmss_RAND[_INDEX]
+    const suffix = index !== null ? `${rand}_${index}` : rand;
 
-    return `${timestamp}_${baseName}`;
+    return `${timestamp}_${suffix}`;
 }
 
-/**
- * Upload single memory buffer to Cloudinary (Multer memoryStorage)
- */
 async function uploadImage(buffer, options = {}) {
-    const { folder = "uploads/photos", publicId } = options;
+    const { folder = "uploads/photos", publicId = generatePublicId() } = options;
     const originalSize = buffer.length;
 
     return new Promise((resolve, reject) => {
@@ -101,8 +95,8 @@ async function uploadMultipleImages(files, folder = "uploads/photos") {
     }
 
     const results = await Promise.all(
-        files.map((file) => {
-            const publicId = generatePublicId(file.originalname);
+        files.map((file, index) => {
+            const publicId = generatePublicId(index);
             return uploadImage(file.buffer, { folder, publicId });
         })
     );
@@ -113,11 +107,8 @@ async function uploadMultipleImages(files, folder = "uploads/photos") {
     };
 }
 
-/**
- * Upload base64 image string to Cloudinary
- */
 async function uploadBase64Image(base64String, options = {}) {
-    const { folder = "uploads/photos", publicId } = options;
+    const { folder = "uploads/photos", publicId = generatePublicId() } = options;
 
     if (!isConfigured()) {
         console.warn("⚠️ Cloudinary not configured, skipping base64 upload.");
@@ -159,7 +150,7 @@ async function processPhotos(photos, folder) {
             if (typeof photo === "string" && (photo.startsWith("data:image/") || photo.startsWith("data:application/"))) {
                 const result = await uploadBase64Image(photo, {
                     folder,
-                    publicId: generatePublicId(`upload_${index}`),
+                    publicId: generatePublicId(index),
                 });
                 return result ? result.url : photo;
             }

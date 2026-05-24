@@ -50,13 +50,17 @@ const diskStorage = multer.diskStorage({
         ].join("");
 
         const ext = path.extname(file.originalname).toLowerCase();
-        const baseName = path
-            .basename(file.originalname, ext)
-            .replace(/[^a-zA-Z0-9_-]/g, "_")
-            .replace(/_+/g, "_")
-            .substring(0, 50);
 
-        cb(null, `${timestamp}_${baseName}${ext}`);
+        // Generate a random 4-character string to prevent collisions
+        const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+
+        // Track batch indexes using a counter on the request object
+        if (req.uploadCounter === undefined) {
+            req.uploadCounter = 0;
+        }
+        const index = req.uploadCounter++;
+
+        cb(null, `${timestamp}_${rand}_${index}${ext}`);
     },
 });
 
