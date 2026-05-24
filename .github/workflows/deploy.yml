@@ -1,35 +1,168 @@
-name: Deploy Microservices to VPS
+name: 🚀 Deploy Microservices to VPS
 
 on:
   push:
     branches:
-      - master # Trigger deployment on push to master branch
+      - master
+
+  # Bisa juga trigger manual dari GitHub UI
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force rebuild semua images (tanpa cache)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+# Hanya 1 deployment boleh berjalan sekaligus
+# Jika ada push baru saat deploy sedang jalan, antri (bukan cancel)
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_DIR: /root/bangunan-berkah
+  COMPOSE_FILE: docker-compose.yml
 
 jobs:
   deploy:
-    name: Deploy to CentOS VPS
+    name: 🏗️ Deploy to CentOS VPS
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Executing remote SSH commands
+      # ══════════════════════════════════════
+      # STEP 1: Deploy via SSH
+      # ══════════════════════════════════════
+      - name: 🔗 SSH & Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 12m
           script: |
-            echo "Memulai proses deployment otomatis..."
+            set -e  # Stop on first error
 
-            # Masuk ke folder project
-            cd /root/bangunan-berkah
+            echo ""
+            echo "════════════════════════════════════════════════"
+            echo "  🚀 DEPLOYMENT STARTED"
+            echo "  📅 $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            echo "════════════════════════════════════════════════"
+            echo ""
 
-            # Tarik kode terbaru dari GitHub
-            git pull origin master
+            cd ${{ env.PROJECT_DIR }}
 
-            # Build ulang image yang ada perubahan kode dan jalankan di background
-            docker compose up -d --build
+            # ── 1. SAVE ROLLBACK POINT ─────────────────────
+            PREV_COMMIT=$(git rev-parse HEAD)
+            echo "📌 Current commit (rollback point): ${PREV_COMMIT:0:8}"
 
-            # Hapus sisa-sisa image Docker lama agar disk VPS tidak penuh
-            docker image prune -a -f
+            # ── 2. PULL LATEST CODE ────────────────────────
+            echo ""
+            echo "⬇️  Pulling latest code from master..."
+            git fetch origin master
+            git reset --hard origin/master
+            echo "✅ Code updated to: $(git rev-parse --short HEAD)"
+            echo "   $(git log -1 --format='%s (%an)')"
 
-            echo "Deployment berhasil diselesaikan!"
+            # ── 3. BUILD & DEPLOY ──────────────────────────
+            echo ""
+            echo "🔨 Building & deploying containers..."
+
+            BUILD_ARGS=""
+            if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+              BUILD_ARGS="--no-cache"
+              echo "⚠️  Force rebuild mode (no cache)"
+            fi
+
+            docker compose up -d --build --remove-orphans $BUILD_ARGS 2>&1
+
+            # ── 4. WAIT FOR CONTAINERS TO START ────────────
+            echo ""
+            echo "⏳ Waiting 15s for containers to initialize..."
+            sleep 15
+
+            # ── 5. HEALTH CHECKS ───────────────────────────
+            echo ""
+            echo "🏥 Running health checks..."
+
+            SERVICES=("api-gateway:8080" "auth-service:8001" "project-service:8004" "review-service:8005" "product-service:8002")
+            FAILED=0
+
+            for SERVICE_PORT in "${SERVICES[@]}"; do
+              SERVICE="${SERVICE_PORT%%:*}"
+              PORT="${SERVICE_PORT##*:}"
+
+              # Check if container is running
+              if ! docker ps --format '{{.Names}}' | grep -q "^${SERVICE}$"; then
+                echo "  ❌ ${SERVICE} — container not running!"
+                FAILED=1
+                continue
+              fi
+
+              # Check health endpoint
+              HTTP_CODE=$(docker exec ${SERVICE} curl -s -o /dev/null -w "%{http_code}" http://localhost:${PORT}/health 2>/dev/null || echo "000")
+
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "  ✅ ${SERVICE} — healthy (port ${PORT})"
+              else
+                echo "  ⚠️  ${SERVICE} — HTTP ${HTTP_CODE} (port ${PORT})"
+                # Don't fail immediately, service might still be starting
+              fi
+            done
+
+            # Check MongoDB
+            if docker exec mongodb mongosh --eval "db.adminCommand('ping')" --quiet 2>/dev/null | grep -q "ok"; then
+              echo "  ✅ mongodb — healthy"
+            else
+              echo "  ❌ mongodb — not responding!"
+              FAILED=1
+            fi
+
+            # Check Redis
+            REDIS_PASS=$(grep REDIS_PASSWORD .env 2>/dev/null | head -1 | cut -d'=' -f2-)
+            if docker exec redis redis-cli -a "${REDIS_PASS}" ping 2>/dev/null | grep -q "PONG"; then
+              echo "  ✅ redis — healthy"
+            else
+              echo "  ⚠️  redis — not responding (might still be starting)"
+            fi
+
+            # ── 6. ROLLBACK IF CRITICAL FAILURE ────────────
+            if [ "$FAILED" -eq 1 ]; then
+              echo ""
+              echo "🔴 CRITICAL: Some services failed!"
+              echo "🔄 Rolling back to ${PREV_COMMIT:0:8}..."
+
+              git reset --hard $PREV_COMMIT
+              docker compose up -d --build --remove-orphans 2>&1
+
+              echo "⏳ Waiting 15s for rollback containers..."
+              sleep 15
+              echo "🔙 Rollback completed. Please check VPS manually."
+              exit 1
+            fi
+
+            # ── 7. CLEANUP ─────────────────────────────────
+            echo ""
+            echo "🧹 Cleaning up unused Docker resources..."
+            docker image prune -f 2>/dev/null || true
+            docker builder prune -f 2>/dev/null || true
+
+            # ── 8. DISK USAGE REPORT ───────────────────────
+            echo ""
+            echo "💾 Disk usage:"
+            df -h / | tail -1 | awk '{print "   Used: "$3" / "$2" ("$5" full)"}'
+            echo "   Docker images: $(docker images --format '{{.Size}}' | head -5 | paste -sd', ')"
+
+            # ── 9. DEPLOYMENT SUMMARY ──────────────────────
+            echo ""
+            echo "════════════════════════════════════════════════"
+            echo "  ✅ DEPLOYMENT SUCCESSFUL"
+            echo "  📦 Commit: $(git rev-parse --short HEAD)"
+            echo "  📝 $(git log -1 --format='%s')"
+            echo "  📅 $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            echo "  🐳 Containers: $(docker ps --format '{{.Names}} ({{.Status}})' | paste -sd', ')"
+            echo "════════════════════════════════════════════════"
