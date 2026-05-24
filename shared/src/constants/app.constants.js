@@ -31,7 +31,8 @@ const USER_ROLES = {
 // ========== PROJECT TYPES ==========
 const PROJECT_TYPE = {
     KONSTRUKSI: "konstruksi",
-    FURNITURE: "furniture",
+    DESIGN: "design",
+    DESIGN_AND_BUILD: "design_and_build",
 };
 
 // ========== PROJECT STATUS ==========

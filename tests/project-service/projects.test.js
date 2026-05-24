@@ -75,7 +75,7 @@ describe("Project Service — Admin Projects", function () {
             expect(res.body.success).to.be.true;
         });
 
-        it("harus berhasil membuat proyek tipe furniture", async function () {
+        it("harus berhasil membuat proyek tipe design", async function () {
             const token = await getAdminToken();
 
             const res = await timeRequest(
@@ -83,10 +83,10 @@ describe("Project Service — Admin Projects", function () {
                     .post("/api/projects")
                     .set("Authorization", `Bearer ${token}`)
                     .send({
-                    projectName: "Proyek Furniture Mocha",
-                    projectType: "furniture",
-                    customerName: "Client Furniture Test",
-                    customerAddress: "Jl. Furniture No. 1, Surabaya",
+                    projectName: "Proyek Design Mocha",
+                    projectType: "design",
+                    customerName: "Client Design Test",
+                    customerAddress: "Jl. Design No. 1, Surabaya",
                 }),
                 'POST',
                 '/api/projects'

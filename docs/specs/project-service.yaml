@@ -18,7 +18,7 @@ info:
     | Tipe | Deskripsi |
     |------|-----------|
     | konstruksi | Proyek konstruksi bangunan |
-    | furniture | Proyek pembuatan furniture |
+    | design | Proyek desain interior/arsitektur |
     | design_and_build | Proyek desain dan pembangunan |
 
     ## Aturan Akses
@@ -57,7 +57,7 @@ components:
         projectCode: { type: string, example: "PRJ-2025-001" }
         projectName: { type: string, example: "Pembangunan Rumah Tipe 45" }
         description: { type: string }
-        projectType: { type: string, enum: [konstruksi, furniture, design_and_build] }
+        projectType: { type: string, enum: [konstruksi, design, design_and_build] }
         customerName: { type: string }
         customerEmail: { type: string, format: email }
         customerPhone: { type: string }
@@ -133,7 +133,7 @@ paths:
         - { in: query, name: page, schema: { type: integer, default: 1 } }
         - { in: query, name: limit, schema: { type: integer, default: 10 } }
         - { in: query, name: status, schema: { type: string, enum: [pending, in_progress, completed, on_hold, cancelled] } }
-        - { in: query, name: projectType, schema: { type: string, enum: [konstruksi, furniture, design_and_build] } }
+        - { in: query, name: projectType, schema: { type: string, enum: [konstruksi, design, design_and_build] } }
         - { in: query, name: search, schema: { type: string }, description: "Cari nama/kode proyek" }
       responses:
         "200": { description: Daftar proyek }
@@ -152,7 +152,7 @@ paths:
               properties:
                 projectName: { type: string, example: "Pembangunan Rumah Tipe 45" }
                 description: { type: string }
-                projectType: { type: string, enum: [konstruksi, furniture, design_and_build] }
+                projectType: { type: string, enum: [konstruksi, design, design_and_build] }
                 customerName: { type: string, example: "Budi Santoso" }
                 customerEmail: { type: string, format: email }
                 customerPhone: { type: string, example: "081234567890" }
@@ -189,7 +189,7 @@ paths:
               type: object
               properties:
                 projectName: { type: string }
-                projectType: { type: string, enum: [konstruksi, furniture, design_and_build] }
+                projectType: { type: string, enum: [konstruksi, design, design_and_build] }
                 customerName: { type: string }
                 customerEmail: { type: string, format: email }
                 customerPhone: { type: string }

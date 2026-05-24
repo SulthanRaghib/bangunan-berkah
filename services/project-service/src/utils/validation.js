@@ -13,8 +13,8 @@ const createProjectSchema = Joi.object({
     description: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Deskripsi maksimal 5000 karakter",
     }),
-    projectType: Joi.string().valid("konstruksi", "furniture", "design_and_build").required().messages({
-        "any.only": "Tipe proyek harus 'konstruksi', 'furniture', atau 'design_and_build'",
+    projectType: Joi.string().valid("konstruksi", "design", "design_and_build").required().messages({
+        "any.only": "Tipe proyek harus 'konstruksi', 'design', atau 'design_and_build'",
         "any.required": "Tipe proyek wajib diisi",
     }),
     customerName: Joi.string().min(3).max(255).required().messages({
@@ -67,8 +67,8 @@ const updateProjectSchema = Joi.object({
     description: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Deskripsi maksimal 5000 karakter",
     }),
-    projectType: Joi.string().valid("konstruksi", "furniture", "design_and_build").optional().messages({
-        "any.only": "Tipe proyek harus 'konstruksi', 'furniture', atau 'design_and_build'",
+    projectType: Joi.string().valid("konstruksi", "design", "design_and_build").optional().messages({
+        "any.only": "Tipe proyek harus 'konstruksi', 'design', atau 'design_and_build'",
     }),
     customerName: Joi.string().min(3).max(255).optional().messages({
         "string.min": "Nama customer minimal 3 karakter",

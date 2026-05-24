@@ -20,7 +20,7 @@ model Project {
     // Project Info (REQUIRED: projectName, projectType)
     projectName String
     description String?
-    projectType String // "konstruksi", "furniture", atau "design_and_build"
+    projectType String // "konstruksi", "design", atau "design_and_build"
 
     // Customer Info (REQUIRED: customerName, customerAddress)
     customerName    String
