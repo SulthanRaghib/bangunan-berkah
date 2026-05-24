@@ -256,12 +256,9 @@ paths:
               required: [photos]
               properties:
                 photos:
-                  type: array
-                  description: "File foto dokumentasi proyek (pilih file, bukan input teks)"
-                  items:
-                    type: string
-                    format: binary
-                  maxItems: 10
+                  type: string
+                  format: binary
+                  description: "Pilih file gambar untuk diunggah (Di Stoplight, unggah 1 file untuk pengujian. Produksi/cURL mendukung banyak file)."
             encoding:
               photos:
                 contentType: image/jpeg, image/png, image/gif, image/webp
@@ -350,10 +347,9 @@ paths:
                 progress: { type: integer }
                 targetDate: { type: string, format: date }
                 photos:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
+                  type: string
+                  format: binary
+                  description: "Pilih file gambar untuk diunggah (Di Stoplight, unggah 1 file untuk pengujian. Produksi/cURL mendukung banyak file)."
             encoding:
               photos:
                 contentType: image/jpeg, image/png, image/gif, image/webp

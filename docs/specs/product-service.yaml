@@ -162,9 +162,9 @@ paths:
                 stock: { type: integer, example: 500 }
                 category_id: { type: string }
                 images:
-                  type: array
-                  items: { type: string, format: binary }
-                  maxItems: 5
+                  type: string
+                  format: binary
+                  description: "Pilih file gambar untuk diunggah (Di Stoplight, unggah 1 file untuk pengujian. Produksi/cURL mendukung banyak file)."
       responses:
         "201": { description: Produk berhasil dibuat }
         "400": { description: Validasi gagal }
@@ -189,7 +189,10 @@ paths:
                 price: { type: number }
                 stock: { type: integer }
                 category_id: { type: string }
-                images: { type: array, items: { type: string, format: binary }, maxItems: 5 }
+                images:
+                  type: string
+                  format: binary
+                  description: "Pilih file gambar untuk diunggah (Di Stoplight, unggah 1 file untuk pengujian. Produksi/cURL mendukung banyak file)."
       responses:
         "200": { description: Produk berhasil diperbarui }
         "404": { description: Produk tidak ditemukan }
