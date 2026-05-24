@@ -5,6 +5,7 @@
 const axios = require("axios");
 const ReviewRepository = require("../repositories/ReviewRepository");
 const { AppError, ValidationError } = require("../utils/errors");
+const { cloudinaryService } = require("../../../../shared");
 
 const PROJECT_SERVICE_URL =
     process.env.PROJECT_SERVICE_URL || "http://project-service:8004";
@@ -24,6 +25,12 @@ class ReviewService {
                 throw new ValidationError(
                     "Proyek harus dalam status 'completed' untuk memberikan review"
                 );
+            }
+
+            // Process and upload photos to Cloudinary if any
+            if (reviewData.photos && reviewData.photos.length > 0) {
+                const folder = `reviews/${reviewData.projectCode}/photos`;
+                reviewData.photos = await cloudinaryService.processPhotos(reviewData.photos, folder);
             }
 
             // Create review
@@ -60,14 +67,47 @@ class ReviewService {
      * Update review
      */
     async updateReview(projectCode, updateData) {
-        return await ReviewRepository.updateReview(projectCode, updateData);
+        try {
+            const oldReview = await ReviewRepository.findByProjectCode(projectCode);
+
+            // Process and upload new photos
+            if (updateData.photos) {
+                const folder = `reviews/${projectCode}/photos`;
+                updateData.photos = await cloudinaryService.processPhotos(updateData.photos, folder);
+                
+                // Cleanup removed photos from Cloudinary
+                await cloudinaryService.cleanupRemovedPhotos(oldReview.photos, updateData.photos);
+            }
+
+            return await ReviewRepository.updateReview(projectCode, updateData);
+        } catch (error) {
+            throw error instanceof AppError || error instanceof ValidationError
+                ? error
+                : new AppError(error.message, 500);
+        }
     }
 
     /**
      * Delete review
      */
     async deleteReview(projectCode) {
-        return await ReviewRepository.deleteReview(projectCode);
+        try {
+            const review = await ReviewRepository.findByProjectCode(projectCode);
+
+            // Delete all photos from Cloudinary
+            if (review.photos && review.photos.length > 0) {
+                const cloudinaryUrls = review.photos.filter((url) => url.includes("cloudinary.com"));
+                if (cloudinaryUrls.length > 0) {
+                    await cloudinaryService.deleteMultipleImages(cloudinaryUrls);
+                }
+            }
+
+            return await ReviewRepository.deleteReview(projectCode);
+        } catch (error) {
+            throw error instanceof AppError || error instanceof ValidationError
+                ? error
+                : new AppError(error.message, 500);
+        }
     }
 
     /**

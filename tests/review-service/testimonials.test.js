@@ -36,6 +36,29 @@ describe("Review Service — Public Testimonials", function () {
             expect(res.body.success).to.be.true;
         });
 
+        it("harus berhasil mengirim testimonial dengan foto base64 dan otomatis terupload ke Cloudinary", async function () {
+            const base64Image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+            const res = await timeRequest(
+                request
+                    .post("/api/testimonials")
+                    .send({
+                        name: "Pelanggan Media",
+                        email: `pelanggan_media_${Date.now()}@example.com`,
+                        position: "Manajer Proyek",
+                        testimonialText: "Ulasan yang sangat baik dengan bukti foto!",
+                        rating: 5,
+                        photos: [base64Image]
+                    }),
+                'POST',
+                '/api/testimonials'
+            );
+
+            expect(res.status).to.be.oneOf([200, 201]);
+            expect(res.body.success).to.be.true;
+            expect(res.body.data.photos).to.be.an("array").that.is.not.empty;
+            expect(res.body.data.photos[0]).to.include("cloudinary.com");
+        });
+
         it("harus gagal tanpa field wajib", async function () {
             const res = await timeRequest(
                 request
