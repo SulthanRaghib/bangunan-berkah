@@ -385,7 +385,60 @@ describe("Project Service — Admin Projects", function () {
     // POST/GET/DELETE /api/projects/:projectCode/photos
     // ========================================
     describe("Project Photos", function () {
-        it("GET - harus berhasil mengambil foto proyek (awalnya kosong)", async function () {
+        let uploadedPhotoUrl = null;
+
+        it("POST - harus berhasil upload foto dokumentasi proyek", async function () {
+            if (!createdProjectCode) this.skip();
+            this.timeout(15000); // upload bisa lambat
+
+            const token = await getAdminToken();
+
+            // Create a minimal valid JPEG (1x1 pixel) for testing
+            const jpegHeader = Buffer.from([
+                0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
+                0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00
+            ]);
+            const jpegFooter = Buffer.from([0xFF, 0xD9]);
+            const testImage = Buffer.concat([jpegHeader, Buffer.alloc(100, 0x00), jpegFooter]);
+
+            const res = await timeRequest(
+                request
+                    .post(`/api/projects/${createdProjectCode}/photos`)
+                    .set("Authorization", `Bearer ${token}`)
+                    .attach("photos", testImage, "test-photo.jpg"),
+                'POST',
+                `/api/projects/${createdProjectCode}/photos`
+            );
+
+            expect(res.status).to.equal(201);
+            expect(res.body.success).to.be.true;
+            expect(res.body.data).to.have.property("uploadedPhotos");
+            expect(res.body.data.uploadedPhotos).to.be.an("array").that.is.not.empty;
+
+            // Save photo URL for DELETE test
+            uploadedPhotoUrl = res.body.data.uploadedPhotos[0];
+        });
+
+        it("POST - harus gagal upload tanpa file", async function () {
+            if (!createdProjectCode) this.skip();
+
+            const token = await getAdminToken();
+
+            // Send proper multipart with no file attached
+            const res = await timeRequest(
+                request
+                    .post(`/api/projects/${createdProjectCode}/photos`)
+                    .set("Authorization", `Bearer ${token}`)
+                    .field("dummy", "no-file"),
+                'POST',
+                `/api/projects/${createdProjectCode}/photos`
+            );
+
+            expect(res.status).to.be.oneOf([400, 500]);
+            expect(res.body.success).to.be.false;
+        });
+
+        it("GET - harus berhasil mengambil foto proyek (termasuk yang baru diupload)", async function () {
             if (!createdProjectCode) this.skip();
 
             const token = await getAdminToken();
@@ -401,6 +454,24 @@ describe("Project Service — Admin Projects", function () {
             expect(res.status).to.equal(200);
             expect(res.body.success).to.be.true;
             expect(res.body.data).to.have.property("photos");
+        });
+
+        it("DELETE - harus berhasil hapus foto dokumentasi proyek", async function () {
+            if (!createdProjectCode || !uploadedPhotoUrl) this.skip();
+
+            const token = await getAdminToken();
+
+            const res = await timeRequest(
+                request
+                    .delete(`/api/projects/${createdProjectCode}/photos`)
+                    .set("Authorization", `Bearer ${token}`)
+                    .send({ url: uploadedPhotoUrl }),
+                'DELETE',
+                `/api/projects/${createdProjectCode}/photos`
+            );
+
+            expect(res.status).to.equal(200);
+            expect(res.body.success).to.be.true;
         });
     });
 
