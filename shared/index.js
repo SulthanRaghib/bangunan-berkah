@@ -43,7 +43,6 @@ const {
     validate,
 } = require("./src/utils/validation.util");
 
-const cloudinaryService = require("./src/utils/cloudinary.util");
 const CONSTANTS = require("./src/constants/app.constants");
 
 module.exports = {
@@ -67,7 +66,9 @@ module.exports = {
     validateData,
     validateRequest,
     validate,
-    cloudinaryService,
+    get cloudinaryService() {
+        return require("./src/utils/cloudinary.util");
+    },
     CONSTANTS,
     formatValidationErrors,
 };
