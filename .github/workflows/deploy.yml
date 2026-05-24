@@ -78,7 +78,7 @@ jobs:
               echo "⚠️  Force rebuild mode (no cache)"
             fi
 
-            docker compose up -d --build --remove-orphans $BUILD_ARGS 2>&1
+            docker compose up -d --build --remove-orphans -V $BUILD_ARGS 2>&1
 
             # ── 4. WAIT FOR CONTAINERS TO START ────────────
             echo ""
