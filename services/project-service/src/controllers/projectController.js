@@ -7,6 +7,7 @@ const projectService = require("../services/projectService");
 const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
 const { createProjectSchema, updateProjectSchema, updateProgressSchema, deletePhotoSchema } = require("../utils/validation");
 const { logProjectActivity } = require("../services/activityLogger");
+const { optimizeUploadedFiles } = require("../utils/imageOptimizer");
 
 /**
  * CREATE PROJECT
@@ -230,6 +231,9 @@ exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
         throw error;
     }
 
+    // ── Optimize images (compress & resize) ──────────
+    const optimizationResults = await optimizeUploadedFiles(req.files);
+
     // Build photo URLs from uploaded files
     const photoUrls = req.files.map(
         (file) => `${req.protocol}://${req.get("host")}/uploads/photos/${file.filename}`
@@ -255,6 +259,7 @@ exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
             uploadedPhotos: photoUrls,
             totalPhotos: updatedProject.photos?.length || 0,
             project: updatedProject,
+            optimization: optimizationResults,
         },
         `${req.files.length} foto berhasil diupload`
     );
