@@ -210,8 +210,24 @@ exports.updateProjectProgress = asyncHandler(async (req, res) => {
 exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
     const { projectCode } = req.params;
 
+    // Validate Content-Type is multipart/form-data
+    const contentType = req.headers["content-type"] || "";
+    if (!contentType.includes("multipart/form-data")) {
+        const error = new Error(
+            "Content-Type harus multipart/form-data. " +
+            "Gunakan form-data dengan field name 'photos' untuk upload file, bukan binary/raw."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
     if (!req.files || req.files.length === 0) {
-        throw new Error("Minimal satu foto harus diupload");
+        const error = new Error(
+            "Minimal satu foto harus diupload. " +
+            "Pastikan field name adalah 'photos' dan file berformat gambar (jpg, png, gif, webp)."
+        );
+        error.statusCode = 400;
+        throw error;
     }
 
     // Build photo URLs from uploaded files

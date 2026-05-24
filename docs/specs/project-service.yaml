@@ -268,7 +268,13 @@ paths:
   /api/projects/{projectCode}/photos:
     post:
       summary: Upload foto dokumentasi proyek (Admin)
-      description: Upload satu atau lebih foto dokumentasi proyek (max 10 file).
+      description: |
+        Upload satu atau lebih foto dokumentasi proyek (max 10 file).
+
+        **PENTING:** Gunakan `multipart/form-data` dengan field name `photos`.
+        Jangan gunakan body type `binary` atau `raw`.
+
+        Format yang didukung: JPEG, PNG, GIF, WEBP (max 10MB per file).
       tags: ["Photos (Admin)"]
       security: [{ bearerAuth: [] }]
       parameters:
@@ -283,11 +289,17 @@ paths:
               properties:
                 photos:
                   type: array
-                  items: { type: string, format: binary }
+                  description: "File foto dokumentasi proyek (pilih file, bukan input teks)"
+                  items:
+                    type: string
+                    format: binary
                   maxItems: 10
+            encoding:
+              photos:
+                contentType: image/jpeg, image/png, image/gif, image/webp
       responses:
         "201": { description: Foto berhasil diupload }
-        "400": { description: Minimal satu foto harus diupload }
+        "400": { description: Minimal satu foto harus diupload atau Content-Type salah }
         "404": { description: Proyek tidak ditemukan }
     get:
       summary: Daftar foto dokumentasi proyek (Admin)
@@ -369,7 +381,14 @@ paths:
                 status: { type: string, enum: [PENDING, ON_PROGRESS, COMPLETED] }
                 progress: { type: integer }
                 targetDate: { type: string, format: date }
-                photos: { type: array, items: { type: string, format: binary } }
+                photos:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+            encoding:
+              photos:
+                contentType: image/jpeg, image/png, image/gif, image/webp
       responses:
         "200": { description: Milestone berhasil diperbarui }
     delete:

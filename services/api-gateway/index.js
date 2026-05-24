@@ -172,26 +172,48 @@ const createProxy = (pathFilter, target) => {
     target,
     changeOrigin: true,
     pathFilter,
-    onProxyReq: (proxyReq, req, res) => {
-      if (req.headers["x-user-id"]) {
-        proxyReq.setHeader("x-user-id", req.headers["x-user-id"]);
-      }
-      if (req.headers["x-user-email"]) {
-        proxyReq.setHeader("x-user-email", req.headers["x-user-email"]);
-      }
-      if (req.headers["x-user-role"]) {
-        proxyReq.setHeader("x-user-role", req.headers["x-user-role"]);
-      }
-      if (req.headers["x-user-token"]) {
-        proxyReq.setHeader("x-user-token", req.headers["x-user-token"]);
-      }
-    },
-    onError: (err, req, res) => {
-      console.error("Proxy Error:", err);
-      res.status(503).json({
-        success: false,
-        message: "Service unavailable. Please try again later.",
-      });
+    // Timeout config — essential for file uploads
+    timeout: 120000,       // 120s socket timeout (upstream connection)
+    proxyTimeout: 120000,  // 120s proxy timeout (waiting for response)
+    // Use v3 'on' syntax for event handlers
+    on: {
+      proxyReq: (proxyReq, req, _res) => {
+        // Forward user identity headers injected by gatewayAuthMiddleware
+        const userHeaders = ["x-user-id", "x-user-email", "x-user-role", "x-user-token"];
+        userHeaders.forEach((header) => {
+          if (req.headers[header]) {
+            proxyReq.setHeader(header, req.headers[header]);
+          }
+        });
+      },
+      error: (err, req, res) => {
+        const targetUrl = `${target}${req.originalUrl || req.url}`;
+        console.error(`[Proxy Error] ${req.method} ${req.originalUrl} → ${targetUrl}:`, err.message);
+
+        // Guard against double-response (headers already sent)
+        if (res.headersSent) {
+          console.error("[Proxy Error] Headers already sent, cannot send error response");
+          return res.end();
+        }
+
+        // Map error codes to appropriate HTTP status
+        const statusMap = {
+          ECONNREFUSED: 503,
+          ECONNRESET: 502,
+          ETIMEDOUT: 504,
+          ENOTFOUND: 503,
+          EPIPE: 502,
+        };
+        const status = statusMap[err.code] || 502;
+
+        res.status(status).json({
+          success: false,
+          message: status === 504
+            ? "Service timeout. Coba lagi nanti atau periksa ukuran file."
+            : "Service tidak tersedia. Coba lagi nanti.",
+          error: process.env.NODE_ENV === "development" ? `${err.code}: ${err.message}` : undefined,
+        });
+      },
     },
   });
 };
