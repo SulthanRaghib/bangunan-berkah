@@ -393,13 +393,11 @@ describe("Project Service — Admin Projects", function () {
 
             const token = await getAdminToken();
 
-            // Create a minimal valid JPEG (1x1 pixel) for testing
-            const jpegHeader = Buffer.from([
-                0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
-                0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00
-            ]);
-            const jpegFooter = Buffer.from([0xFF, 0xD9]);
-            const testImage = Buffer.concat([jpegHeader, Buffer.alloc(100, 0x00), jpegFooter]);
+            // Create a valid 1x1 transparent PNG for testing (Cloudinary friendly)
+            const testImage = Buffer.from(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+                "base64"
+            );
 
             const res = await timeRequest(
                 request
