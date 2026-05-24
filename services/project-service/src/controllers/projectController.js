@@ -7,7 +7,7 @@ const projectService = require("../services/projectService");
 const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
 const { createProjectSchema, updateProjectSchema, updateProgressSchema, deletePhotoSchema } = require("../utils/validation");
 const { logProjectActivity } = require("../services/activityLogger");
-const { optimizeUploadedFiles } = require("../utils/imageOptimizer");
+const cloudinaryService = require("../utils/cloudinary");
 
 /**
  * CREATE PROJECT
@@ -207,6 +207,10 @@ exports.updateProjectProgress = asyncHandler(async (req, res) => {
 /**
  * UPLOAD PROJECT PHOTOS
  * POST /api/projects/:projectCode/photos
+ *
+ * Supports two storage backends:
+ * - Cloudinary (when CLOUDINARY_* env vars are set) — recommended
+ * - Local disk (fallback) — files saved to /uploads/photos/
  */
 exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
     const { projectCode } = req.params;
@@ -231,15 +235,34 @@ exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
         throw error;
     }
 
-    // ── Optimize images (compress & resize) ──────────
-    const optimizationResults = await optimizeUploadedFiles(req.files);
+    let photoUrls = [];
+    let uploadMeta = {};
 
-    // Build photo URLs using public-facing host (via API Gateway proxy headers)
-    const publicHost = req.get("x-forwarded-host") || req.get("host");
-    const publicProto = req.get("x-forwarded-proto") || req.protocol;
-    const photoUrls = req.files.map(
-        (file) => `${publicProto}://${publicHost}/uploads/photos/${file.filename}`
-    );
+    if (cloudinaryService.isConfigured()) {
+        // ── Cloudinary upload (recommended) ──────────
+        const folder = `projects/${projectCode}/photos`;
+        const { urls, results } = await cloudinaryService.uploadMultipleImages(req.files, folder);
+        photoUrls = urls;
+        uploadMeta = {
+            storage: "cloudinary",
+            optimization: results.map((r) => ({
+                filename: r.publicId.split("/").pop(),
+                format: r.format,
+                dimensions: `${r.width}x${r.height}`,
+                originalSize: r.originalSize,
+                optimizedSize: r.optimizedSize,
+                reduction: r.reduction,
+            })),
+        };
+    } else {
+        // ── Local disk fallback ──────────────────────
+        const publicHost = req.get("x-forwarded-host") || req.get("host");
+        const publicProto = req.get("x-forwarded-proto") || req.protocol;
+        photoUrls = req.files.map(
+            (file) => `${publicProto}://${publicHost}/uploads/photos/${file.filename}`
+        );
+        uploadMeta = { storage: "local" };
+    }
 
     const updatedProject = await projectService.uploadProjectPhotos(
         projectCode,
@@ -251,8 +274,8 @@ exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
         userId: req.user.id.toString(),
         userName: req.user.name || req.user.email,
         action: "photos_uploaded",
-        description: `${req.files.length} foto dokumentasi diupload`,
-        metadata: { photoCount: req.files.length },
+        description: `${req.files.length} foto dokumentasi diupload via ${uploadMeta.storage}`,
+        metadata: { photoCount: req.files.length, storage: uploadMeta.storage },
     });
 
     return sendCreated(
@@ -261,7 +284,7 @@ exports.uploadProjectPhotos = asyncHandler(async (req, res) => {
             uploadedPhotos: photoUrls,
             totalPhotos: updatedProject.photos?.length || 0,
             project: updatedProject,
-            optimization: optimizationResults,
+            ...uploadMeta,
         },
         `${req.files.length} foto berhasil diupload`
     );
@@ -286,10 +309,17 @@ exports.getProjectPhotos = asyncHandler(async (req, res) => {
 /**
  * DELETE PROJECT PHOTO
  * DELETE /api/projects/:projectCode/photos
+ *
+ * Deletes from database AND from Cloudinary (if URL is a Cloudinary URL).
  */
 exports.deleteProjectPhoto = asyncHandler(async (req, res) => {
     const { projectCode } = req.params;
     const value = await validate(deletePhotoSchema, req.body);
+
+    // Remove from Cloudinary if it's a Cloudinary URL
+    if (value.url && value.url.includes("cloudinary.com")) {
+        await cloudinaryService.deleteImage(value.url);
+    }
 
     const updatedProject = await projectService.deleteProjectPhoto(
         projectCode,

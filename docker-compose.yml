@@ -190,6 +190,10 @@ services:
       AUTH_REDIS_STRICT: ${AUTH_REDIS_STRICT:-true}
       AUTH_REDIS_FAIL_CLOSED_PATHS: ${AUTH_REDIS_FAIL_CLOSED_PATHS:-/api/projects,/api/dashboard,/api/milestones}
       AUTH_REDIS_FAIL_OPEN_PATHS: ${AUTH_REDIS_FAIL_OPEN_PATHS:-}
+      # Cloudinary — set these to enable CDN uploads (recommended)
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
     ports:
       - "8004:8004"
     volumes:
