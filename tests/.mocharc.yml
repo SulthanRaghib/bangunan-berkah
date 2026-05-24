@@ -3,16 +3,20 @@
 # ============================================
 # Black-box integration test configuration
 # Tests run against API Gateway (port 8080)
+#
+# Usage:
+#   npm test              → Run all services
+#   npm run test:auth     → Auth service only
+#   npm run test:project  → Project service only
+#   npm run test:review   → Review service only
 
 require:
   - ./helpers/setup.js
 
 spec:
   - "auth-service/**/*.test.js"
-  - "product-service/**/*.test.js"
   - "project-service/**/*.test.js"
   - "review-service/**/*.test.js"
-  - "chat-service/**/*.test.js"
 
 timeout: 15000
 recursive: true

@@ -2,116 +2,97 @@
  * ============================================
  * TIMER HELPER
  * ============================================
- * Tracks and logs response time for each API request
+ * Tracks and logs response time + HTTP status code
+ * for each API request during testing
+ *
+ * Output format:
+ *   POST   /api/auth/login → 200 OK — 45ms ⚡
+ *   GET    /api/auth/profile → 401 Unauthorized — 12ms ⚡
  */
 
+// ── HTTP Status Text Map ───────────────────────────────────
+const HTTP_STATUS = {
+    200: "OK",
+    201: "Created",
+    204: "No Content",
+    301: "Moved Permanently",
+    302: "Found",
+    304: "Not Modified",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    409: "Conflict",
+    422: "Unprocessable Entity",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+};
+
+// ── ANSI Colors ────────────────────────────────────────────
+const RESET = "\x1b[0m";
+const BOLD = "\x1b[1m";
+const DIM = "\x1b[2m";
+
+function getStatusColor(status) {
+    if (status >= 200 && status < 300) return "\x1b[32m"; // Green
+    if (status >= 300 && status < 400) return "\x1b[36m"; // Cyan
+    if (status >= 400 && status < 500) return "\x1b[33m"; // Yellow
+    return "\x1b[31m"; // Red (5xx)
+}
+
+function getSpeedInfo(ms) {
+    if (ms > 1000) return { emoji: "🐢", color: "\x1b[33m" }; // Slow — Yellow
+    if (ms > 500) return { emoji: "⚠️", color: "\x1b[36m" };  // Medium — Cyan
+    return { emoji: "⚡", color: "\x1b[32m" };                  // Fast — Green
+}
+
 /**
- * Wrap a supertest request to track and log response time
- * Usage: await timeRequest(request.get('/api/endpoint'), 'GET', '/api/endpoint')
- * Output: [GET] /api/endpoint - 45ms ✓
- * 
+ * Wrap a supertest request to track and log response time + status code
+ *
  * @param {Promise} requestPromise - The supertest request promise
  * @param {string} method - HTTP method (GET, POST, PUT, DELETE, PATCH)
  * @param {string} endpoint - API endpoint path
  * @returns {Promise} The response object
  */
 async function timeRequest(requestPromise, method, endpoint) {
-    const startTime = process.hrtime.bigint(); // More precise than Date.now()
+    const startTime = process.hrtime.bigint();
 
     try {
         const response = await requestPromise;
         const endTime = process.hrtime.bigint();
-        const durationMs = Number(endTime - startTime) / 1_000_000; // Convert nanoseconds to milliseconds
+        const durationMs = Number(endTime - startTime) / 1_000_000;
 
-        // Color code based on response time
-        let emoji = "✓";
-        let timeColor = "";
+        const statusCode = response.status;
+        const statusText = HTTP_STATUS[statusCode] || "Unknown";
+        const statusColor = getStatusColor(statusCode);
+        const speed = getSpeedInfo(durationMs);
 
-        if (durationMs > 1000) {
-            emoji = "🐢"; // Slow
-            timeColor = "\x1b[33m"; // Yellow
-        } else if (durationMs > 500) {
-            emoji = "⚠️"; // Medium
-            timeColor = "\x1b[36m"; // Cyan
-        } else {
-            emoji = "⚡"; // Fast
-            timeColor = "\x1b[32m"; // Green
-        }
+        const baseUrl = global.BASE_URL || "http://localhost:8080";
+        const methodStr = method.padEnd(6);
+        const arrow = `${DIM}→${RESET}`;
+        const statusStr = `${statusColor}${BOLD}${statusCode}${RESET} ${statusColor}${statusText}${RESET}`;
+        const timeStr = `${speed.color}${durationMs.toFixed(0)}ms${RESET}`;
+        const fullUrl = `${DIM}${baseUrl}${RESET}${endpoint}`;
 
-        const reset = "\x1b[0m";
-        console.log(`  [${method}] ${endpoint} - ${timeColor}${durationMs.toFixed(2)}ms${reset} ${emoji}`);
+        console.log(
+            `      ${methodStr} ${fullUrl} ${arrow} ${statusStr} ${DIM}—${RESET} ${timeStr} ${speed.emoji}`
+        );
 
         return response;
     } catch (error) {
         const endTime = process.hrtime.bigint();
         const durationMs = Number(endTime - startTime) / 1_000_000;
-        console.log(`  [${method}] ${endpoint} - \x1b[31m${durationMs.toFixed(2)}ms\x1b[0m ❌ (Error: ${error.message})`);
+
+        const baseUrl = global.BASE_URL || "http://localhost:8080";
+        console.log(
+            `      ${method.padEnd(6)} ${DIM}${baseUrl}${RESET}${endpoint} ${DIM}→${RESET} \x1b[31m${BOLD}ERROR${RESET} ${DIM}—${RESET} ${durationMs.toFixed(0)}ms ❌ (${error.message})`
+        );
         throw error;
     }
-}
-
-/**
- * Create a timed request wrapper for all HTTP methods
- * Usage in tests:
- *   const timedRequest = createTimedRequest(request);
- *   await timedRequest.get('/api/endpoint');
- * 
- * @param {SuperTest} request - The supertest instance
- * @returns {Object} Object with wrapped HTTP methods
- */
-function createTimedRequest(request) {
-    return {
-        get: (endpoint) => ({
-            send: () => timeRequest(request.get(endpoint), 'GET', endpoint),
-            set: (header, value) => {
-                request.get(endpoint).set(header, value);
-                return {
-                    send: () => timeRequest(request.get(endpoint).set(header, value), 'GET', endpoint),
-                    end: (cb) => timeRequest(request.get(endpoint).set(header, value), 'GET', endpoint).then(cb).catch(cb),
-                };
-            },
-            expect: (status) => timeRequest(request.get(endpoint).expect(status), 'GET', endpoint),
-            then: (onFulfilled, onRejected) => timeRequest(request.get(endpoint), 'GET', endpoint).then(onFulfilled, onRejected),
-            catch: (onRejected) => timeRequest(request.get(endpoint), 'GET', endpoint).catch(onRejected),
-        }),
-        post: (endpoint) => ({
-            send: (data) => timeRequest(request.post(endpoint).send(data), 'POST', endpoint),
-            set: (header, value) => {
-                request.post(endpoint).set(header, value);
-                return {
-                    send: (data) => timeRequest(request.post(endpoint).set(header, value).send(data), 'POST', endpoint),
-                };
-            },
-        }),
-        put: (endpoint) => ({
-            send: (data) => timeRequest(request.put(endpoint).send(data), 'PUT', endpoint),
-            set: (header, value) => {
-                request.put(endpoint).set(header, value);
-                return {
-                    send: (data) => timeRequest(request.put(endpoint).set(header, value).send(data), 'PUT', endpoint),
-                };
-            },
-        }),
-        patch: (endpoint) => ({
-            send: (data) => timeRequest(request.patch(endpoint).send(data), 'PATCH', endpoint),
-            set: (header, value) => {
-                request.patch(endpoint).set(header, value);
-                return {
-                    send: (data) => timeRequest(request.patch(endpoint).set(header, value).send(data), 'PATCH', endpoint),
-                };
-            },
-        }),
-        delete: (endpoint) => ({
-            set: (header, value) => {
-                request.delete(endpoint).set(header, value);
-                return {
-                    send: (data) => timeRequest(request.delete(endpoint).set(header, value).send(data), 'DELETE', endpoint),
-                    end: (cb) => timeRequest(request.delete(endpoint).set(header, value), 'DELETE', endpoint).then(cb).catch(cb),
-                };
-            },
-            send: (data) => timeRequest(request.delete(endpoint).send(data), 'DELETE', endpoint),
-        }),
-    };
 }
 
 /**
@@ -125,14 +106,20 @@ async function logTime(requestFn, label) {
         const response = await requestFn();
         const endTime = process.hrtime.bigint();
         const durationMs = Number(endTime - startTime) / 1_000_000;
-        console.log(`  ${label} - \x1b[32m${durationMs.toFixed(2)}ms\x1b[0m ⚡`);
+        const speed = getSpeedInfo(durationMs);
+
+        console.log(
+            `      ${label} ${DIM}—${RESET} ${speed.color}${durationMs.toFixed(0)}ms${RESET} ${speed.emoji}`
+        );
         return response;
     } catch (error) {
         const endTime = process.hrtime.bigint();
         const durationMs = Number(endTime - startTime) / 1_000_000;
-        console.log(`  ${label} - \x1b[31m${durationMs.toFixed(2)}ms\x1b[0m ❌`);
+        console.log(
+            `      ${label} ${DIM}—${RESET} \x1b[31m${durationMs.toFixed(0)}ms${RESET} ❌`
+        );
         throw error;
     }
 }
 
-module.exports = { timeRequest, createTimedRequest, logTime };
+module.exports = { timeRequest, logTime };

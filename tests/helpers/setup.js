@@ -3,10 +3,12 @@
  * GLOBAL TEST SETUP
  * ============================================
  * Loaded before all test files via .mocharc.yml
- * Sets up global variables and configuration
+ * Sets up global variables, configuration, and prints
+ * the test banner with endpoint registry table
  */
 
 const { expect } = require("chai");
+const { printEndpointTable } = require("./reporter.helper");
 
 // Make expect available globally
 global.expect = expect;
@@ -25,7 +27,23 @@ global.TEST_USER = {
     password: process.env.TEST_USER_PASSWORD || "admin123",
 };
 
-console.log("\n" + "=".repeat(60));
-console.log("  🧪 PT Solusi Bangunan Berkah — Black-Box Testing");
-console.log("  📡 Target: " + global.BASE_URL);
-console.log("=".repeat(60) + "\n");
+// ── Print Banner ───────────────────────────────────────────
+const now = new Date();
+const timestamp = now.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+});
+
+console.log("\n" + "═".repeat(64));
+console.log("  🧪 PT Solusi Bangunan Berkah — API Testing Suite");
+console.log("  📡 Base URL: " + global.BASE_URL);
+console.log("  🕐 Started: " + timestamp);
+console.log("═".repeat(64));
+
+// ── Print Endpoint Table ───────────────────────────────────
+printEndpointTable();

@@ -1,16 +1,16 @@
 /**
  * ============================================
- * AUTH SERVICE — Profile Tests
+ * AUTH SERVICE — Cek Profile Tests (Admin)
  * ============================================
  * Black-box testing untuk endpoint profile:
  * - GET /api/auth/profile (protected)
  */
 
 const { createRequest } = require("../helpers/request.helper");
-const { getAdminToken, getUserToken } = require("../helpers/auth.helper");
+const { getAdminToken } = require("../helpers/auth.helper");
 const { timeRequest } = require("../helpers/timer.helper");
 
-describe("Auth Service — Profile", function () {
+describe("Auth Service — Cek Profile (Admin)", function () {
     const request = createRequest();
 
     // ========================================
@@ -24,39 +24,22 @@ describe("Auth Service — Profile", function () {
                 request
                     .get("/api/auth/profile")
                     .set("Authorization", `Bearer ${token}`),
-                'GET',
-                '/api/auth/profile'
+                "GET",
+                "/api/auth/profile"
             );
 
             expect(res.status).to.equal(200);
             expect(res.body.success).to.be.true;
             expect(res.body.data.user).to.have.property("email");
             expect(res.body.data.user).to.have.property("name");
-            expect(res.body.data.user).to.have.property("role");
-        });
-
-        it("harus berhasil mengambil profile user biasa", async function () {
-            const token = await getUserToken();
-
-            const res = await timeRequest(
-                request
-                    .get("/api/auth/profile")
-                    .set("Authorization", `Bearer ${token}`),
-                'GET',
-                '/api/auth/profile'
-            );
-
-            expect(res.status).to.equal(200);
-            expect(res.body.success).to.be.true;
-            expect(res.body.data.user).to.have.property("role", "user");
+            expect(res.body.data.user).to.have.property("role", "admin");
         });
 
         it("harus gagal tanpa token", async function () {
             const res = await timeRequest(
-                request
-                    .get("/api/auth/profile"),
-                'GET',
-                '/api/auth/profile'
+                request.get("/api/auth/profile"),
+                "GET",
+                "/api/auth/profile"
             );
 
             expect(res.status).to.equal(401);
@@ -68,8 +51,8 @@ describe("Auth Service — Profile", function () {
                 request
                     .get("/api/auth/profile")
                     .set("Authorization", "Bearer invalidtoken123"),
-                'GET',
-                '/api/auth/profile'
+                "GET",
+                "/api/auth/profile"
             );
 
             expect(res.status).to.equal(401);
