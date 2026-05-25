@@ -503,11 +503,8 @@ class ProjectRepository extends BaseRepository {
 
         let progress = 0;
         if (total > 0) {
-            const completed = milestones.filter((m) => {
-                const s = (m.status || "").toUpperCase();
-                return s === "COMPLETED" || s === "SELESAI";
-            }).length;
-            progress = Math.round((completed / total) * 100);
+            const sumProgress = milestones.reduce((sum, m) => sum + (m.progress || 0), 0);
+            progress = Math.round(sumProgress / total);
         }
 
         await this.updateOne({ projectCode }, { progress });

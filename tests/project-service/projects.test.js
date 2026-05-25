@@ -338,11 +338,11 @@ describe("Project Service — Admin Projects", function () {
                 });
             expect(updateRes1.status).to.equal(200);
 
-            // Check project progress (still 0% because 0/1 completed)
+            // Check project progress (should be 50% because milestone 1 is ON_PROGRESS = 50%)
             const projRes2 = await request
                 .get(`/api/projects/${createdProjectCode}`)
                 .set("Authorization", `Bearer ${token}`);
-            expect(projRes2.body.data.progress).to.equal(0);
+            expect(projRes2.body.data.progress).to.equal(50);
 
             // 3. Update milestone 1 to selesai / COMPLETED
             const updateRes2 = await request
@@ -353,7 +353,7 @@ describe("Project Service — Admin Projects", function () {
                 });
             expect(updateRes2.status).to.equal(200);
 
-            // Check project progress (should be 100% because 1/1 completed)
+            // Check project progress (should be 100% because 1/1 completed = 100%)
             const projRes3 = await request
                 .get(`/api/projects/${createdProjectCode}`)
                 .set("Authorization", `Bearer ${token}`);
@@ -371,11 +371,26 @@ describe("Project Service — Admin Projects", function () {
             expect(addRes2.status).to.be.oneOf([200, 201]);
             const milestoneId2 = addRes2.body.data.milestone.id;
 
-            // Check project progress (should be 50% because 1/2 completed)
+            // Check project progress (should be 50% because (100 + 0) / 2 = 50%)
             const projRes4 = await request
                 .get(`/api/projects/${createdProjectCode}`)
                 .set("Authorization", `Bearer ${token}`);
             expect(projRes4.body.data.progress).to.equal(50);
+
+            // 5. Update milestone 2 to berjalan (ON_PROGRESS = 50%)
+            const updateRes3 = await request
+                .patch(`/api/projects/${createdProjectCode}/milestones/${milestoneId2}`)
+                .set("Authorization", `Bearer ${token}`)
+                .send({
+                    status: "berjalan"
+                });
+            expect(updateRes3.status).to.equal(200);
+
+            // Check project progress (should be 75% because (100 + 50) / 2 = 75%)
+            const projRes5 = await request
+                .get(`/api/projects/${createdProjectCode}`)
+                .set("Authorization", `Bearer ${token}`);
+            expect(projRes5.body.data.progress).to.equal(75);
 
             // Cleanup: Delete milestone 1 and 2
             await request

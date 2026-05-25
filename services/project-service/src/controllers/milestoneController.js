@@ -11,6 +11,17 @@ const { logProjectActivity } = require("../services/activityLogger");
 const { addMilestoneSchema, updateMilestoneSchema } = require("../utils/validation");
 const cloudinaryService = require("../utils/cloudinary");
 
+const cleanEmptyStrings = (body) => {
+    if (!body || typeof body !== "object") return body;
+    const cleaned = { ...body };
+    Object.keys(cleaned).forEach((key) => {
+        if (cleaned[key] === "") {
+            delete cleaned[key];
+        }
+    });
+    return cleaned;
+};
+
 /**
  * ADD MILESTONE
  * POST /api/projects/:projectCode/milestones
@@ -18,8 +29,9 @@ const cloudinaryService = require("../utils/cloudinary");
 exports.addMilestone = asyncHandler(async (req, res) => {
     const { projectCode } = req.params;
     
-    // Validate request body
-    const validatedData = await validate(addMilestoneSchema, req.body);
+    // Validate request body after cleaning empty values
+    const cleanedBody = cleanEmptyStrings(req.body);
+    const validatedData = await validate(addMilestoneSchema, cleanedBody);
     const { title, name, description, detail, targetDate, status, progress, photos } = validatedData;
 
     const result = await milestoneService.addMilestone(projectCode, {
@@ -57,8 +69,9 @@ exports.addMilestone = asyncHandler(async (req, res) => {
 exports.updateMilestone = asyncHandler(async (req, res) => {
     const { projectCode, milestoneId } = req.params;
 
-    // Validate request body
-    const validatedData = await validate(updateMilestoneSchema, req.body);
+    // Validate request body after cleaning empty values
+    const cleanedBody = cleanEmptyStrings(req.body);
+    const validatedData = await validate(updateMilestoneSchema, cleanedBody);
     const { title, name, description, detail, status, progress, targetDate, actualCompletionDate } = validatedData;
 
     // Handle photo uploads if any
