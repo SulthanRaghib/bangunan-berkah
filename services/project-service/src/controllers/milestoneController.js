@@ -6,8 +6,10 @@
  */
 
 const milestoneService = require("../services/milestoneService");
-const { asyncHandler, sendSuccess, sendCreated } = require("../../../shared");
+const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
 const { logProjectActivity } = require("../services/activityLogger");
+const { addMilestoneSchema, updateMilestoneSchema } = require("../utils/validation");
+const cloudinaryService = require("../utils/cloudinary");
 
 /**
  * ADD MILESTONE
@@ -15,7 +17,10 @@ const { logProjectActivity } = require("../services/activityLogger");
  */
 exports.addMilestone = asyncHandler(async (req, res) => {
     const { projectCode } = req.params;
-    const { title, name, description, detail, targetDate, status, progress, photos } = req.body;
+    
+    // Validate request body
+    const validatedData = await validate(addMilestoneSchema, req.body);
+    const { title, name, description, detail, targetDate, status, progress, photos } = validatedData;
 
     const result = await milestoneService.addMilestone(projectCode, {
         title,
@@ -51,7 +56,26 @@ exports.addMilestone = asyncHandler(async (req, res) => {
  */
 exports.updateMilestone = asyncHandler(async (req, res) => {
     const { projectCode, milestoneId } = req.params;
-    const { title, name, description, detail, status, progress, targetDate, actualCompletionDate } = req.body;
+
+    // Validate request body
+    const validatedData = await validate(updateMilestoneSchema, req.body);
+    const { title, name, description, detail, status, progress, targetDate, actualCompletionDate } = validatedData;
+
+    // Handle photo uploads if any
+    let photoUrls = undefined;
+    if (req.files && req.files.length > 0) {
+        if (cloudinaryService.isConfigured()) {
+            const folder = `projects/${projectCode}/milestones`;
+            const { urls } = await cloudinaryService.uploadMultipleImages(req.files, folder);
+            photoUrls = urls;
+        } else {
+            const publicHost = req.get("x-forwarded-host") || req.get("host");
+            const publicProto = req.get("x-forwarded-proto") || req.protocol;
+            photoUrls = req.files.map(
+                (file) => `${publicProto}://${publicHost}/uploads/photos/${file.filename}`
+            );
+        }
+    }
 
     const result = await milestoneService.updateMilestone(
         projectCode,
@@ -65,6 +89,7 @@ exports.updateMilestone = asyncHandler(async (req, res) => {
             progress,
             targetDate,
             actualCompletionDate,
+            photos: photoUrls,
         }
     );
 

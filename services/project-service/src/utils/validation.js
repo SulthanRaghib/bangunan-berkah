@@ -118,6 +118,88 @@ const deletePhotoSchema = Joi.object({
 });
 
 // ========================================
+// MILESTONE VALIDATION
+// ========================================
+const addMilestoneSchema = Joi.object({
+    title: Joi.string().min(3).max(255).optional().messages({
+        "string.min": "Judul milestone minimal 3 karakter",
+        "string.max": "Judul milestone maksimal 255 karakter",
+    }),
+    name: Joi.string().min(3).max(255).optional().messages({
+        "string.min": "Nama milestone minimal 3 karakter",
+        "string.max": "Nama milestone maksimal 255 karakter",
+    }),
+    description: Joi.string().max(5000).optional().allow("", null).messages({
+        "string.max": "Deskripsi maksimal 5000 karakter",
+    }),
+    detail: Joi.string().max(5000).optional().allow("", null).messages({
+        "string.max": "Detail maksimal 5000 karakter",
+    }),
+    targetDate: Joi.date().required().messages({
+        "date.base": "Tanggal target harus berupa tanggal yang valid",
+        "any.required": "Tanggal target wajib diisi",
+    }),
+    status: Joi.string()
+        .valid(
+            "menunggu", "berjalan", "selesai",
+            "PENDING", "ON_PROGRESS", "COMPLETED",
+            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress"
+        )
+        .optional()
+        .messages({
+            "any.only": "Status milestone harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'",
+        }),
+    progress: Joi.number().min(0).max(100).optional().messages({
+        "number.min": "Progress minimal 0",
+        "number.max": "Progress maksimal 100",
+    }),
+    photos: Joi.array().items(Joi.string().uri()).optional().messages({
+        "array.base": "Photos harus berupa array",
+    }),
+}).or("title", "name").messages({
+    "object.missing": "Salah satu dari judul (title) atau nama (name) milestone wajib diisi",
+});
+
+const updateMilestoneSchema = Joi.object({
+    title: Joi.string().min(3).max(255).optional().messages({
+        "string.min": "Judul milestone minimal 3 karakter",
+        "string.max": "Judul milestone maksimal 255 karakter",
+    }),
+    name: Joi.string().min(3).max(255).optional().messages({
+        "string.min": "Nama milestone minimal 3 karakter",
+        "string.max": "Nama milestone maksimal 255 karakter",
+    }),
+    description: Joi.string().max(5000).optional().allow("", null).messages({
+        "string.max": "Deskripsi maksimal 5000 karakter",
+    }),
+    detail: Joi.string().max(5000).optional().allow("", null).messages({
+        "string.max": "Detail maksimal 5000 karakter",
+    }),
+    targetDate: Joi.date().optional().messages({
+        "date.base": "Tanggal target harus berupa tanggal yang valid",
+    }),
+    status: Joi.string()
+        .valid(
+            "menunggu", "berjalan", "selesai",
+            "PENDING", "ON_PROGRESS", "COMPLETED",
+            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress"
+        )
+        .optional()
+        .messages({
+            "any.only": "Status milestone harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'",
+        }),
+    progress: Joi.number().min(0).max(100).optional().messages({
+        "number.min": "Progress minimal 0",
+        "number.max": "Progress maksimal 100",
+    }),
+    actualCompletionDate: Joi.date().optional().allow(null).messages({
+        "date.base": "Tanggal penyelesaian harus berupa tanggal yang valid",
+    }),
+}).min(1).messages({
+    "object.min": "Minimal satu field harus diperbarui",
+});
+
+// ========================================
 // EXPORTS
 // ========================================
 // Export only schemas - validation logic is handled by shared validate utility
@@ -125,4 +207,6 @@ module.exports = {
     createProjectSchema,
     updateProjectSchema,
     deletePhotoSchema,
+    addMilestoneSchema,
+    updateMilestoneSchema,
 };

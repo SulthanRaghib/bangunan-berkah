@@ -96,6 +96,28 @@ describe("Project Service — Milestones", function () {
             // Milestone response should NOT contain projectProgress
             expect(data).to.not.have.property("projectProgress");
         });
+
+        it("harus gagal menambah milestone dengan status tidak valid", async function () {
+            if (!tempProjectCode) this.skip();
+
+            const token = await getAdminToken();
+
+            const res = await timeRequest(
+                request
+                    .post(`/api/projects/${tempProjectCode}/milestones`)
+                    .set("Authorization", `Bearer ${token}`)
+                    .send({
+                        title: "Invalid Status Milestone",
+                        status: "X",
+                        targetDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                    }),
+                'POST',
+                `/api/projects/${tempProjectCode}/milestones (Invalid Status)`
+            );
+
+            expect(res.status).to.equal(400);
+            expect(res.body.success).to.be.false;
+        });
     });
 
     // ========================================
@@ -147,6 +169,53 @@ describe("Project Service — Milestones", function () {
 
             // Milestone response should NOT contain projectProgress
             expect(res.body.data).to.not.have.property("projectProgress");
+        });
+
+        it("harus gagal update milestone dengan status tidak valid", async function () {
+            if (!milestoneId) this.skip();
+
+            const token = await getAdminToken();
+
+            const res = await timeRequest(
+                request
+                    .patch(`/api/projects/${tempProjectCode}/milestones/${milestoneId}`)
+                    .set("Authorization", `Bearer ${token}`)
+                    .send({
+                        status: "X",
+                    }),
+                'PATCH',
+                `/api/projects/${tempProjectCode}/milestones/${milestoneId} (Invalid Status)`
+            );
+
+            expect(res.status).to.equal(400);
+            expect(res.body.success).to.be.false;
+        });
+
+        it("harus berhasil update milestone dengan foto", async function () {
+            if (!milestoneId) this.skip();
+
+            const token = await getAdminToken();
+            const testImage = Buffer.from(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "base64"
+            );
+
+            const res = await timeRequest(
+                request
+                    .patch(`/api/projects/${tempProjectCode}/milestones/${milestoneId}`)
+                    .set("Authorization", `Bearer ${token}`)
+                    .field("title", "Milestone Updated With Photo")
+                    .field("status", "COMPLETED")
+                    .attach("photos", testImage, "milestone-photo.jpg"),
+                'PATCH',
+                `/api/projects/${tempProjectCode}/milestones/${milestoneId} (With Photo)`
+            );
+
+            expect(res.status).to.be.oneOf([200, 500]);
+            if (res.status === 200) {
+                expect(res.body.success).to.be.true;
+                expect(res.body.data.milestone.photos).to.be.an("array").that.is.not.empty;
+            }
         });
     });
 

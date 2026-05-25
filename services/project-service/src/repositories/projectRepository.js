@@ -318,13 +318,14 @@ class ProjectRepository extends BaseRepository {
             throw new NotFoundError("Milestone");
         }
 
-        const updatePath = `milestones.${milestoneIndex}`;
+                const updatePath = `milestones.${milestoneIndex}`;
         const updateData = {
             [`${updatePath}.title`]: milestoneData.title,
             [`${updatePath}.description`]: milestoneData.description,
             [`${updatePath}.targetDate`]: new Date(milestoneData.targetDate),
             [`${updatePath}.progress`]: milestoneData.progress,
             [`${updatePath}.status`]: milestoneData.status,
+            [`${updatePath}.photos`]: milestoneData.photos,
             [`${updatePath}.updatedAt`]: new Date(),
         };
 

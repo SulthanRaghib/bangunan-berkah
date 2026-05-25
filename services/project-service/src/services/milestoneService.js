@@ -99,6 +99,11 @@ class MilestoneService {
                 }
             }
 
+            // Merge photos if new photos are uploaded
+            const photos = milestoneData.photos !== undefined
+                ? [...(milestone.photos || []), ...milestoneData.photos]
+                : (milestone.photos || []);
+
             // Prepare update data
             const updatedMilestoneData = {
                 title:
@@ -115,6 +120,7 @@ class MilestoneService {
                 status,
                 progress,
                 actualCompletionDate,
+                photos,
             };
 
             // Update milestone
