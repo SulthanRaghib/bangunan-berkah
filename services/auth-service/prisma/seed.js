@@ -11,7 +11,7 @@ async function main() {
     console.log("🗑️  Cleaning existing users...");
     // On standalone MongoDB, some Prisma operations require replica sets (transactions).
     // Use raw command to perform a deleteMany without transactions so seeder works on single-node Mongo.
-    await prisma.$runCommandRaw({ delete: "User", deletes: [{ q: {}, limit: 0 }] }).catch(async (err) => {
+    await prisma.$runCommandRaw({ delete: "users", deletes: [{ q: {}, limit: 0 }] }).catch(async (err) => {
       // Fallback: try deleteMany via Prisma if $runCommandRaw isn't supported for some reason
       try {
         await prisma.user.deleteMany({});
