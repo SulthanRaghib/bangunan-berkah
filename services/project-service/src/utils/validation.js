@@ -1,6 +1,42 @@
 const Joi = require("joi")
 
 // ========================================
+// HELPER FUNCTIONS FOR VALIDATION
+// ========================================
+
+/**
+ * Validasi cross-field untuk timeline proyek
+ * Memastikan: startDate <= estimatedEndDate
+ */
+const validateProjectTimeline = (value) => {
+    if (!value.startDate || !value.estimatedEndDate) {
+        return; // Skip validation jika salah satu tidak ada
+    }
+
+    const startDate = new Date(value.startDate);
+    const estimatedEndDate = new Date(value.estimatedEndDate);
+
+    // Check if startDate is in far past (more than 1 year back)
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    if (startDate < oneYearAgo) {
+        throw new Error("Tanggal mulai tidak boleh lebih dari 1 tahun yang lalu. Gunakan tanggal yang realistis untuk proyek aktif");
+    }
+
+    // Check if estimatedEndDate is more than 10 years in future
+    const tenYearsFromNow = new Date();
+    tenYearsFromNow.setFullYear(tenYearsFromNow.getFullYear() + 10);
+    if (estimatedEndDate > tenYearsFromNow) {
+        throw new Error("Tanggal selesai estimasi tidak boleh lebih dari 10 tahun ke depan");
+    }
+
+    // Main validation: estimatedEndDate must be >= startDate
+    if (estimatedEndDate < startDate) {
+        throw new Error("Tanggal selesai estimasi harus lebih besar atau sama dengan tanggal mulai proyek");
+    }
+};
+
+// ========================================
 // PROJECT VALIDATION
 // ========================================
 const createProjectSchema = Joi.object({
@@ -52,7 +88,7 @@ const createProjectSchema = Joi.object({
     notes: Joi.string().max(5000).optional().allow("", null).messages({
         "string.max": "Catatan maksimal 5000 karakter",
     }),
-});
+}).external(validateProjectTimeline);
 
 const updateProjectSchema = Joi.object({
     projectName: Joi.string().min(5).max(255).optional().messages({
@@ -104,7 +140,7 @@ const updateProjectSchema = Joi.object({
     }),
 }).min(1).messages({
     "object.min": "Minimal satu field harus diperbarui",
-});
+}).external(validateProjectTimeline);
 
 // ========================================
 // PHOTOS VALIDATION
@@ -120,6 +156,34 @@ const deletePhotoSchema = Joi.object({
 // ========================================
 // MILESTONE VALIDATION
 // ========================================
+
+/**
+ * Validasi untuk milestone - standardisasi status format
+ * Menerima berbagai format tapi akan disimpan dalam format standard
+ */
+const normalizeMilestoneStatus = (status) => {
+    if (!status) return status;
+
+    const statusMap = {
+        "menunggu": "PENDING",
+        "berjalan": "IN_PROGRESS",
+        "selesai": "COMPLETED",
+        "pending": "PENDING",
+        "PENDING": "PENDING",
+        "on_progress": "IN_PROGRESS",
+        "in_progress": "IN_PROGRESS",
+        "IN_PROGRESS": "IN_PROGRESS",
+        "menunggu": "PENDING",
+        "MENUNGGU": "PENDING",
+        "completed": "COMPLETED",
+        "COMPLETED": "COMPLETED",
+        "selesai": "COMPLETED",
+        "SELESAI": "COMPLETED",
+    };
+
+    return statusMap[status.toLowerCase()] || status.toUpperCase();
+};
+
 const addMilestoneSchema = Joi.object({
     title: Joi.string().min(3).max(255).optional().messages({
         "string.min": "Judul milestone minimal 3 karakter",
@@ -143,12 +207,13 @@ const addMilestoneSchema = Joi.object({
         .valid(
             "menunggu", "berjalan", "selesai",
             "PENDING", "ON_PROGRESS", "COMPLETED",
-            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress"
+            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress", "pending", "completed"
         )
         .optional()
         .messages({
-            "any.only": "Status milestone harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'",
-        }),
+            "any.only": "Status milestone harus 'pending', 'in_progress', atau 'completed'",
+        })
+        .default("PENDING"),
     progress: Joi.number().min(0).max(100).optional().messages({
         "number.min": "Progress minimal 0",
         "number.max": "Progress maksimal 100",
@@ -159,6 +224,24 @@ const addMilestoneSchema = Joi.object({
 }).or("title", "name").messages({
     "object.missing": "Salah satu dari judul (title) atau nama (name) milestone wajib diisi",
 });
+
+/**
+ * Validasi cross-field untuk milestone timeline
+ * Memastikan: actualCompletionDate >= targetDate
+ */
+const validateMilestoneTimeline = (value) => {
+    if (!value.targetDate || !value.actualCompletionDate) {
+        return; // Skip validation jika salah satu tidak ada
+    }
+
+    const targetDate = new Date(value.targetDate);
+    const actualCompletionDate = new Date(value.actualCompletionDate);
+
+    // actualCompletionDate tidak boleh sebelum targetDate
+    if (actualCompletionDate < targetDate) {
+        throw new Error("Tanggal penyelesaian aktual tidak boleh lebih awal dari tanggal target milestone");
+    }
+};
 
 const updateMilestoneSchema = Joi.object({
     title: Joi.string().min(3).max(255).optional().messages({
@@ -182,11 +265,11 @@ const updateMilestoneSchema = Joi.object({
         .valid(
             "menunggu", "berjalan", "selesai",
             "PENDING", "ON_PROGRESS", "COMPLETED",
-            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress"
+            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress", "pending", "completed"
         )
         .optional()
         .messages({
-            "any.only": "Status milestone harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'",
+            "any.only": "Status milestone harus 'pending', 'in_progress', atau 'completed'",
         }),
     progress: Joi.number().min(0).max(100).optional().messages({
         "number.min": "Progress minimal 0",
@@ -197,7 +280,7 @@ const updateMilestoneSchema = Joi.object({
     }),
 }).min(1).messages({
     "object.min": "Minimal satu field harus diperbarui",
-});
+}).external(validateMilestoneTimeline);
 
 // ========================================
 // EXPORTS
@@ -209,4 +292,8 @@ module.exports = {
     deletePhotoSchema,
     addMilestoneSchema,
     updateMilestoneSchema,
+    // Helper functions untuk validasi dan normalisasi
+    validateProjectTimeline,
+    validateMilestoneTimeline,
+    normalizeMilestoneStatus,
 };

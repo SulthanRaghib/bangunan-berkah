@@ -70,9 +70,30 @@ class ProjectService {
 
     /**
      * Update project
+     * 
+     * Business Logic Validations:
+     * - Jika budget diupdate, pastikan tidak lebih kecil dari actualCost yang sudah tercatat
      */
     async updateProject(projectCode, updateData) {
         try {
+            // Validasi business logic: budget vs actualCost
+            if (updateData.budget !== undefined && updateData.budget !== null) {
+                const project = await projectRepository.findByCode(projectCode);
+                if (!project) {
+                    throw new ValidationError("Proyek tidak ditemukan");
+                }
+
+                const actualCost = project.actualCost || 0;
+                const newBudget = parseFloat(updateData.budget);
+
+                if (newBudget < actualCost) {
+                    throw new ValidationError(
+                        `Budget tidak boleh lebih kecil dari biaya aktual yang sudah tercatat (Rp ${actualCost.toLocaleString('id-ID')}). ` +
+                        `Budget yang diinput: Rp ${newBudget.toLocaleString('id-ID')}`
+                    );
+                }
+            }
+
             return await projectRepository.updateProject(projectCode, updateData);
         } catch (error) {
             throw error instanceof AppError ? error : new AppError(error.message, 500);
