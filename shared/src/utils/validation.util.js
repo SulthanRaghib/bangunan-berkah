@@ -90,7 +90,7 @@ const localizeValidationMessage = (detail) => {
  * @param {Object} options - Joi validation options (optional)
  * @throws {ValidationError} Jika validation gagal
  */
-const validateData = (schema, data, options = {}) => {
+const validateData = async (schema, data, options = {}) => {
     const validateOptions = {
         abortEarly: false,
         errors: {
@@ -98,14 +98,19 @@ const validateData = (schema, data, options = {}) => {
                 label: "",
             },
         },
+        // allowUnknown handled by schema if needed
         ...options,
     };
 
-    const { error, value } = schema.validate(data, validateOptions);
-
-    if (error) {
-        const errors = error.details.map((detail) => ({
-            field: detail.path.join("."),
+    try {
+        // Use async validation to support .external() rules
+        const value = await schema.validateAsync(data, validateOptions);
+        return value;
+    } catch (error) {
+        // Joi throws ValidationError for both field errors and external errors
+        const details = error.details || [];
+        const errors = details.map((detail) => ({
+            field: Array.isArray(detail.path) ? detail.path.join(".") : (detail.path || ""),
             message: localizeValidationMessage(detail),
         }));
 
@@ -116,8 +121,6 @@ const validateData = (schema, data, options = {}) => {
 
         throw validationError;
     }
-
-    return value;
 };
 
 /**
@@ -126,12 +129,12 @@ const validateData = (schema, data, options = {}) => {
  * @param {string} source - 'body', 'query', atau 'params' (default: 'body')
  */
 const validateRequest = (schema, source = "body") => {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         try {
             const data = req[source];
-            const validatedData = validateData(schema, data);
+            const validatedData = await validateData(schema, data);
             req[source] = validatedData; // Replace dengan validated data
-            next();
+            return next();
         } catch (err) {
             const errors = err.details || [];
             return res.status(400).json({
