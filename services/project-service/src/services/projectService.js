@@ -24,7 +24,9 @@ class ProjectService {
                 customerEmail: projectData.customerEmail || null,
                 customerPhone: projectData.customerPhone || null,
                 customerAddress: projectData.customerAddress,
-                budget: projectData.budget ? parseFloat(projectData.budget) : null,
+                budget: (Object.prototype.hasOwnProperty.call(projectData, 'budget') && projectData.budget !== null && projectData.budget !== '')
+                    ? parseFloat(projectData.budget)
+                    : null,
                 actualCost: 0,
                 startDate: projectData.startDate ? new Date(projectData.startDate) : null,
                 estimatedEndDate: projectData.estimatedEndDate ? new Date(projectData.estimatedEndDate) : null,

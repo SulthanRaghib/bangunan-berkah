@@ -109,10 +109,23 @@ const validateData = async (schema, data, options = {}) => {
     } catch (error) {
         // Joi throws ValidationError for both field errors and external errors
         const details = error.details || [];
-        const errors = details.map((detail) => ({
-            field: Array.isArray(detail.path) ? detail.path.join(".") : (detail.path || ""),
-            message: localizeValidationMessage(detail),
-        }));
+        let errors = [];
+
+        if (details && details.length > 0) {
+            errors = details.map((detail) => ({
+                field: Array.isArray(detail.path) ? detail.path.join(".") : (detail.path || ""),
+                message: localizeValidationMessage(detail),
+            }));
+        } else {
+            // When .external() throws or Joi returns a generic error without details,
+            // include the top-level error message so caller receives a meaningful message.
+            errors = [
+                {
+                    field: "",
+                    message: cleanMessage(error.message || "Validasi data gagal"),
+                },
+            ];
+        }
 
         const validationError = new Error("Validasi data gagal");
         validationError.name = "ValidationError";

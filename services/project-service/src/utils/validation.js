@@ -30,9 +30,9 @@ const validateProjectTimeline = (value) => {
         throw new Error("Tanggal selesai estimasi tidak boleh lebih dari 10 tahun ke depan");
     }
 
-    // Main validation: estimatedEndDate must be >= startDate
-    if (estimatedEndDate < startDate) {
-        throw new Error("Tanggal selesai estimasi harus lebih besar atau sama dengan tanggal mulai proyek");
+    // Main validation: estimatedEndDate must be strictly greater than startDate
+    if (estimatedEndDate <= startDate) {
+        throw new Error("Tanggal selesai estimasi harus lebih besar dari tanggal mulai proyek");
     }
 };
 
@@ -75,9 +75,9 @@ const createProjectSchema = Joi.object({
         "string.max": "Alamat proyek maksimal 500 karakter",
         "any.required": "Alamat proyek wajib diisi",
     }),
-    budget: Joi.number().positive().optional().allow(null).messages({
+    budget: Joi.number().min(0).optional().allow(null).messages({
         "number.base": "Budget harus berupa angka",
-        "number.positive": "Budget harus lebih dari 0",
+        "number.min": "Budget tidak boleh bernilai negatif",
     }),
     startDate: Joi.date().optional().allow(null).messages({
         "date.base": "Tanggal mulai harus berupa tanggal valid",
@@ -119,9 +119,9 @@ const updateProjectSchema = Joi.object({
         "string.min": "Alamat proyek minimal 10 karakter",
         "string.max": "Alamat proyek maksimal 500 karakter",
     }),
-    budget: Joi.number().positive().optional().allow(null).messages({
+    budget: Joi.number().min(0).optional().allow(null).messages({
         "number.base": "Budget harus berupa angka",
-        "number.positive": "Budget harus lebih dari 0",
+        "number.min": "Budget tidak boleh bernilai negatif",
     }),
     startDate: Joi.date().optional().allow(null).messages({
         "date.base": "Tanggal mulai harus berupa tanggal valid",
@@ -169,19 +169,12 @@ const normalizeMilestoneStatus = (status) => {
         "berjalan": "IN_PROGRESS",
         "selesai": "COMPLETED",
         "pending": "PENDING",
-        "PENDING": "PENDING",
-        "on_progress": "IN_PROGRESS",
         "in_progress": "IN_PROGRESS",
-        "IN_PROGRESS": "IN_PROGRESS",
-        "menunggu": "PENDING",
-        "MENUNGGU": "PENDING",
         "completed": "COMPLETED",
-        "COMPLETED": "COMPLETED",
-        "selesai": "COMPLETED",
-        "SELESAI": "COMPLETED",
     };
 
-    return statusMap[status.toLowerCase()] || status.toUpperCase();
+    const key = String(status).toLowerCase();
+    return statusMap[key] || String(status).toUpperCase();
 };
 
 const addMilestoneSchema = Joi.object({
@@ -206,8 +199,7 @@ const addMilestoneSchema = Joi.object({
     status: Joi.string()
         .valid(
             "menunggu", "berjalan", "selesai",
-            "PENDING", "ON_PROGRESS", "COMPLETED",
-            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress", "pending", "completed"
+            "pending", "in_progress", "completed"
         )
         .optional()
         .messages({
@@ -264,8 +256,7 @@ const updateMilestoneSchema = Joi.object({
     status: Joi.string()
         .valid(
             "menunggu", "berjalan", "selesai",
-            "PENDING", "ON_PROGRESS", "COMPLETED",
-            "MENUNGGU", "IN_PROGRESS", "BERJALAN", "SELESAI", "in_progress", "pending", "completed"
+            "pending", "in_progress", "completed"
         )
         .optional()
         .messages({
