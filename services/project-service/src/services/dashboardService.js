@@ -20,10 +20,10 @@ class DashboardService {
             const projects = result.data || [];
             const totalProjects = projects.length;
             const activeProjects = projects.filter(
-                (project) => project.status && project.status !== "completed"
+                (project) => project.status && String(project.status).toLowerCase() !== "completed"
             ).length;
             const completedProjects = projects.filter(
-                (project) => project.status === "completed"
+                (project) => String(project.status).toLowerCase() === "completed"
             ).length;
             const totalBudget = projects.reduce(
                 (sum, project) => sum + (Number(project.budget) || 0),
@@ -89,6 +89,7 @@ class DashboardService {
                 throw new NotFoundError("Project");
             }
 
+            const { normalizeMilestoneStatus } = require("../utils/milestoneHelper");
             const milestones = project.milestones || [];
             const activities = project.activities || [];
 
@@ -127,10 +128,7 @@ class DashboardService {
                 milestones: {
                     total: milestones.length,
                     completed: milestones.filter(
-                        (m) => {
-                            const s = (m.status || "").toUpperCase();
-                            return s === "COMPLETED" || s === "SELESAI";
-                        }
+                        (m) => normalizeMilestoneStatus(m.status) === "selesai"
                     ).length,
                     list: milestones
                         .slice(-5)
@@ -187,10 +185,7 @@ class DashboardService {
                 stats: {
                     totalMilestones: milestones.length,
                     completedMilestones: milestones.filter(
-                        (m) => {
-                            const s = (m.status || "").toUpperCase();
-                            return s === "COMPLETED" || s === "SELESAI";
-                        }
+                        (m) => normalizeMilestoneStatus(m.status) === "selesai"
                     ).length,
                     progressPercentage: project.progress,
                     totalDocuments: documents.length,

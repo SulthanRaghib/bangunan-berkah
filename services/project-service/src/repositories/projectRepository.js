@@ -183,7 +183,7 @@ class ProjectRepository extends BaseRepository {
             updatedAt: new Date(),
         };
 
-        if (status === "completed") {
+        if (String(status).toLowerCase() === "completed") {
             updateData.actualEndDate = new Date();
         }
 
@@ -318,7 +318,7 @@ class ProjectRepository extends BaseRepository {
             throw new NotFoundError("Milestone");
         }
 
-                const updatePath = `milestones.${milestoneIndex}`;
+        const updatePath = `milestones.${milestoneIndex}`;
         const updateData = {
             [`${updatePath}.title`]: milestoneData.title,
             [`${updatePath}.description`]: milestoneData.description,
@@ -586,7 +586,7 @@ class ProjectRepository extends BaseRepository {
             updatedAt,
             duration: duration !== null ? `${duration} hari` : null,
             daysRemaining,
-            isOverdue: daysRemaining === 0 && project.status !== "completed",
+            isOverdue: daysRemaining === 0 && String(project.status || "").toLowerCase() !== "completed",
         };
     }
 

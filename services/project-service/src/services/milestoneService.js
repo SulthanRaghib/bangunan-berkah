@@ -24,7 +24,7 @@ class MilestoneService {
                 throw new NotFoundError("Project");
             }
 
-            const status = normalizeMilestoneStatus(milestoneData.status || "PENDING");
+            const status = normalizeMilestoneStatus(milestoneData.status || "menunggu");
             const progress = getMilestoneProgressFromStatus(status);
 
             const milestone = {
@@ -37,7 +37,7 @@ class MilestoneService {
                 targetDate: new Date(milestoneData.targetDate),
                 status,
                 progress,
-                actualCompletionDate: status === "COMPLETED"
+                actualCompletionDate: status === "selesai"
                     ? (milestoneData.actualCompletionDate ? new Date(milestoneData.actualCompletionDate) : new Date())
                     : null,
                 photos: milestoneData.photos || [],
@@ -87,8 +87,8 @@ class MilestoneService {
             const progress = getMilestoneProgressFromStatus(status);
 
             let actualCompletionDate = null;
-            if (status === "COMPLETED") {
-                if (normalizeMilestoneStatus(milestone.status) !== "COMPLETED") {
+            if (status === "selesai") {
+                if (normalizeMilestoneStatus(milestone.status) !== "selesai") {
                     actualCompletionDate = milestoneData.actualCompletionDate
                         ? new Date(milestoneData.actualCompletionDate)
                         : new Date();

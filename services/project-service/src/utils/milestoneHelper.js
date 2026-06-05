@@ -6,19 +6,36 @@
 const { ValidationError } = require("./errors");
 
 function normalizeMilestoneStatus(status) {
-    if (!status) return "PENDING";
-    const s = status.trim().toUpperCase();
-    if (s === "PENDING" || s === "MENUNGGU") return "PENDING";
-    if (s === "ON_PROGRESS" || s === "IN_PROGRESS" || s === "BERJALAN") return "ON_PROGRESS";
-    if (s === "COMPLETED" || s === "SELESAI") return "COMPLETED";
-    throw new ValidationError("Status milestone tidak valid. Harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'");
+    if (!status) return "menunggu";
+
+    // Normalize input: trim, lowercase, unify separators to underscore
+    let s = String(status).trim().toLowerCase();
+    s = s.replace(/[-\s]+/g, "_"); // replace spaces/dashes with underscore
+    s = s.replace(/__+/g, "_"); // collapse multiple underscores
+
+    if (s === "menunggu" || s === "pending") return "menunggu";
+    if (
+        s === "berjalan" ||
+        s === "in_progress" ||
+        s === "in-progress" ||
+        s === "inprogress" ||
+        s === "on_progress" ||
+        s === "on-progress" ||
+        s === "onprogress"
+    )
+        return "berjalan";
+    if (s === "selesai" || s === "completed") return "selesai";
+
+    throw new ValidationError(
+        "Status milestone tidak valid. Harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'"
+    );
 }
 
 function getMilestoneProgressFromStatus(status) {
     const normStatus = normalizeMilestoneStatus(status);
-    if (normStatus === "COMPLETED") return 100;
-    if (normStatus === "ON_PROGRESS") return 50;
-    return 0; // PENDING
+    if (normStatus === "selesai") return 100;
+    if (normStatus === "berjalan") return 50;
+    return 0; // menunggu
 }
 
 module.exports = {

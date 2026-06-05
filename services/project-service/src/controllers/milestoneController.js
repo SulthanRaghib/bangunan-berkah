@@ -8,7 +8,7 @@
 const milestoneService = require("../services/milestoneService");
 const { asyncHandler, validate, sendSuccess, sendCreated } = require("../../../shared");
 const { logProjectActivity } = require("../services/activityLogger");
-const { addMilestoneSchema, updateMilestoneSchema } = require("../utils/validation");
+const { addMilestoneSchema, updateMilestoneSchema, normalizeMilestoneStatus } = require("../utils/validation");
 const cloudinaryService = require("../utils/cloudinary");
 
 const cleanEmptyStrings = (body) => {
@@ -28,11 +28,12 @@ const cleanEmptyStrings = (body) => {
  */
 exports.addMilestone = asyncHandler(async (req, res) => {
     const { projectCode } = req.params;
-    
+
     // Validate request body after cleaning empty values
     const cleanedBody = cleanEmptyStrings(req.body);
     const validatedData = await validate(addMilestoneSchema, cleanedBody);
     const { title, name, description, detail, targetDate, status, progress, photos } = validatedData;
+    const normalizedStatus = status ? normalizeMilestoneStatus(status) : undefined;
 
     const result = await milestoneService.addMilestone(projectCode, {
         title,
@@ -40,7 +41,7 @@ exports.addMilestone = asyncHandler(async (req, res) => {
         description,
         detail,
         targetDate,
-        status,
+        status: normalizedStatus,
         progress,
         photos,
     });
@@ -73,6 +74,7 @@ exports.updateMilestone = asyncHandler(async (req, res) => {
     const cleanedBody = cleanEmptyStrings(req.body);
     const validatedData = await validate(updateMilestoneSchema, cleanedBody);
     const { title, name, description, detail, status, progress, targetDate, actualCompletionDate } = validatedData;
+    const normalizedStatus = status ? normalizeMilestoneStatus(status) : undefined;
 
     // Handle photo uploads if any
     let photoUrls = undefined;
@@ -98,7 +100,7 @@ exports.updateMilestone = asyncHandler(async (req, res) => {
             name,
             description,
             detail,
-            status,
+            status: normalizedStatus,
             progress,
             targetDate,
             actualCompletionDate,

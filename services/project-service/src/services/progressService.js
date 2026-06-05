@@ -6,6 +6,7 @@
 
 const projectRepository = require("../repositories/projectRepository");
 const { AppError, NotFoundError } = require("../utils/errors");
+const { normalizeMilestoneStatus } = require("../utils/milestoneHelper");
 
 class ProgressService {
     /**
@@ -54,7 +55,7 @@ class ProgressService {
 
             const milestones = project.milestones || [];
             const completedMilestones = milestones.filter(
-                (m) => m.status === "completed" || m.status === "COMPLETED"
+                (m) => normalizeMilestoneStatus(m.status) === "selesai"
             ).length;
 
             return {
@@ -68,10 +69,10 @@ class ProgressService {
                     total: milestones.length,
                     completed: completedMilestones,
                     inProgress: milestones.filter(
-                        (m) => m.status === "in_progress" || m.status === "ON_PROGRESS"
+                        (m) => normalizeMilestoneStatus(m.status) === "berjalan"
                     ).length,
                     pending: milestones.filter(
-                        (m) => m.status === "pending" || m.status === "PENDING"
+                        (m) => normalizeMilestoneStatus(m.status) === "menunggu"
                     ).length,
                     onHold: milestones.filter(
                         (m) => m.status === "on_hold"

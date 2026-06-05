@@ -5,6 +5,7 @@
 
 const projectRepository = require("../repositories/projectRepository");
 const { AppError, NotFoundError } = require("../utils/errors");
+const { normalizeMilestoneStatus } = require("../utils/milestoneHelper");
 
 class TrackingService {
     /**
@@ -127,7 +128,7 @@ class TrackingService {
                     status: m.status,
                     progress: m.progress,
                     daysStatus:
-                        m.status === "completed" || m.status === "COMPLETED"
+                        normalizeMilestoneStatus(m.status) === "selesai"
                             ? `Completed on ${m.actualCompletionDate}`
                             : m.targetDate < new Date()
                                 ? "Overdue"

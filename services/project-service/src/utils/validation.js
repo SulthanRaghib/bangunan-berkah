@@ -130,6 +130,7 @@ const updateProjectSchema = Joi.object({
         "date.base": "Estimasi tanggal selesai harus berupa tanggal valid",
     }),
     status: Joi.string()
+        .lowercase()
         .valid("pending", "in_progress", "on_hold", "completed", "cancelled")
         .optional()
         .messages({
@@ -164,17 +165,24 @@ const deletePhotoSchema = Joi.object({
 const normalizeMilestoneStatus = (status) => {
     if (!status) return status;
 
-    const statusMap = {
-        "menunggu": "PENDING",
-        "berjalan": "IN_PROGRESS",
-        "selesai": "COMPLETED",
-        "pending": "PENDING",
-        "in_progress": "IN_PROGRESS",
-        "completed": "COMPLETED",
+    // Normalize various accepted inputs to Indonesian canonical terms
+    const map = {
+        // Indonesian
+        "menunggu": "menunggu",
+        "berjalan": "berjalan",
+        "selesai": "selesai",
+        // English equivalents
+        "pending": "menunggu",
+        "in_progress": "berjalan",
+        "in-progress": "berjalan",
+        "inprogress": "berjalan",
+        "on_progress": "berjalan",
+        "on-progress": "berjalan",
+        "completed": "selesai",
     };
 
     const key = String(status).toLowerCase();
-    return statusMap[key] || String(status).toUpperCase();
+    return map[key] || key; // fallback to lowercase input
 };
 
 const addMilestoneSchema = Joi.object({
@@ -197,15 +205,16 @@ const addMilestoneSchema = Joi.object({
         "any.required": "Tanggal target wajib diisi",
     }),
     status: Joi.string()
+        .lowercase()
         .valid(
             "menunggu", "berjalan", "selesai",
-            "pending", "in_progress", "completed"
+            "pending", "in_progress", "in-progress", "inprogress", "completed"
         )
         .optional()
         .messages({
-            "any.only": "Status milestone harus 'pending', 'in_progress', atau 'completed'",
+            "any.only": "Status milestone harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'",
         })
-        .default("PENDING"),
+        .default("menunggu"),
     progress: Joi.number().min(0).max(100).optional().messages({
         "number.min": "Progress minimal 0",
         "number.max": "Progress maksimal 100",
@@ -254,13 +263,14 @@ const updateMilestoneSchema = Joi.object({
         "date.base": "Tanggal target harus berupa tanggal yang valid",
     }),
     status: Joi.string()
+        .lowercase()
         .valid(
             "menunggu", "berjalan", "selesai",
-            "pending", "in_progress", "completed"
+            "pending", "in_progress", "in-progress", "inprogress", "completed"
         )
         .optional()
         .messages({
-            "any.only": "Status milestone harus 'pending', 'in_progress', atau 'completed'",
+            "any.only": "Status milestone harus salah satu dari: 'menunggu', 'berjalan', atau 'selesai'",
         }),
     progress: Joi.number().min(0).max(100).optional().messages({
         "number.min": "Progress minimal 0",
