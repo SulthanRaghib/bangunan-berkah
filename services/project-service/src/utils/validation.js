@@ -208,7 +208,8 @@ const addMilestoneSchema = Joi.object({
         .lowercase()
         .valid(
             "menunggu", "berjalan", "selesai",
-            "pending", "in_progress", "in-progress", "inprogress", "completed"
+            "pending", "in_progress", "in-progress", "inprogress",
+            "on_progress", "on-progress", "completed"
         )
         .optional()
         .messages({
@@ -266,7 +267,8 @@ const updateMilestoneSchema = Joi.object({
         .lowercase()
         .valid(
             "menunggu", "berjalan", "selesai",
-            "pending", "in_progress", "in-progress", "inprogress", "completed"
+            "pending", "in_progress", "in-progress", "inprogress",
+            "on_progress", "on-progress", "completed"
         )
         .optional()
         .messages({
