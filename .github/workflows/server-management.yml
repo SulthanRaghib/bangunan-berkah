@@ -1,0 +1,493 @@
+name: 🛠️ Server Management Console
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "🎯 Aksi yang ingin dilakukan"
+        required: true
+        type: choice
+        options:
+          - "🔍 server-status"
+          - "🐳 docker-start"
+          - "🐳 docker-restart"
+          - "🚀 containers-up"
+          - "⏹️ containers-down"
+          - "🔄 containers-restart"
+          - "🌱 run-seeder"
+          - "⚡ exec-command"
+          - "📋 view-logs"
+          - "🏥 health-check"
+          - "🧹 disk-cleanup"
+          - "🔑 nginx-restart"
+
+      target_service:
+        description: "🎯 Target service (untuk seeder/exec/logs/restart)"
+        required: false
+        type: choice
+        default: "all"
+        options:
+          - "all"
+          - "api-gateway"
+          - "auth-service"
+          - "project-service"
+          - "review-service"
+          - "product-service"
+          - "chat-service"
+          - "mongodb"
+          - "redis"
+          - "host"
+
+      custom_command:
+        description: "⚡ Custom command (untuk exec-command)"
+        required: false
+        type: string
+        default: ""
+
+      log_lines:
+        description: "📋 Jumlah baris log (untuk view-logs)"
+        required: false
+        type: choice
+        default: "50"
+        options:
+          - "20"
+          - "50"
+          - "100"
+          - "200"
+
+      confirm:
+        description: "✅ Ketik 'yes' untuk konfirmasi aksi destructive"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: server-management
+  cancel-in-progress: false
+
+env:
+  PROJECT_DIR: /root/bangunan-berkah
+
+jobs:
+  manage:
+    name: "🛠️ ${{ github.event.inputs.action }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 🛠️ Execute Server Management
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 8m
+          script: |
+            # ══════════════════════════════════════════════
+            # 🛠️ SERVER MANAGEMENT CONSOLE
+            # ══════════════════════════════════════════════
+
+            ACTION="${{ github.event.inputs.action }}"
+            TARGET="${{ github.event.inputs.target_service }}"
+            CUSTOM_CMD="${{ github.event.inputs.custom_command }}"
+            LOG_LINES="${{ github.event.inputs.log_lines }}"
+            CONFIRM="${{ github.event.inputs.confirm }}"
+            PROJECT_DIR="${{ env.PROJECT_DIR }}"
+
+            # ── Helper Functions ──────────────────────────
+            print_header() {
+              echo ""
+              echo "════════════════════════════════════════════════"
+              echo "  $1"
+              echo "  📅 $(date '+%Y-%m-%d %H:%M:%S %Z')"
+              echo "  👤 Triggered by: ${{ github.actor }}"
+              echo "════════════════════════════════════════════════"
+              echo ""
+            }
+
+            require_confirm() {
+              if [ "$CONFIRM" != "yes" ]; then
+                echo "❌ Aksi ini membutuhkan konfirmasi!"
+                echo "   Isi field 'confirm' dengan 'yes' untuk melanjutkan."
+                exit 1
+              fi
+            }
+
+            ensure_docker() {
+              if ! docker info > /dev/null 2>&1; then
+                echo "⚠️  Docker daemon tidak berjalan!"
+                echo "🔄 Mencoba start Docker..."
+                systemctl start docker
+                sleep 5
+                if ! docker info > /dev/null 2>&1; then
+                  echo "❌ Gagal start Docker daemon!"
+                  exit 1
+                fi
+                echo "✅ Docker daemon berhasil distart"
+              fi
+            }
+
+            print_status() {
+              echo ""
+              echo "── 📊 System Info ──────────────────────────────"
+              echo "  🖥️  Hostname : $(hostname)"
+              echo "  🐧 OS       : $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
+              echo "  ⏰ Uptime   : $(uptime -p)"
+              echo "  💾 Disk     : $(df -h / | tail -1 | awk '{print $3 " / " $2 " (" $5 " used)"}')"
+              echo "  🧠 Memory   : $(free -h | grep Mem | awk '{print $3 " / " $2 " (" int($3/$2*100) "% used)"}')"
+              echo ""
+              echo "── 🐳 Docker Status ────────────────────────────"
+              if docker info > /dev/null 2>&1; then
+                echo "  Status   : ✅ Running"
+                echo "  Version  : $(docker --version | cut -d' ' -f3 | tr -d ',')"
+                echo "  Images   : $(docker images -q | wc -l)"
+                echo "  Networks : $(docker network ls -q | wc -l)"
+                echo ""
+                echo "── 📦 Container Status ─────────────────────────"
+                docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  No containers"
+              else
+                echo "  Status: ❌ NOT RUNNING"
+              fi
+              echo ""
+              echo "── 🌐 Nginx Status ─────────────────────────────"
+              if systemctl is-active nginx > /dev/null 2>&1; then
+                echo "  Status: ✅ Running"
+              else
+                echo "  Status: ❌ Not Running"
+              fi
+            }
+
+            # ══════════════════════════════════════════════
+            # 🎯 ACTION ROUTER
+            # ══════════════════════════════════════════════
+
+            case "$ACTION" in
+
+              # ── SERVER STATUS ────────────────────────────
+              "🔍 server-status")
+                print_header "🔍 SERVER STATUS CHECK"
+                print_status
+                ;;
+
+              # ── DOCKER START ─────────────────────────────
+              "🐳 docker-start")
+                print_header "🐳 STARTING DOCKER DAEMON"
+                if docker info > /dev/null 2>&1; then
+                  echo "ℹ️  Docker sudah berjalan."
+                else
+                  echo "🔄 Starting Docker daemon..."
+                  systemctl start docker
+                  sleep 5
+                  if docker info > /dev/null 2>&1; then
+                    echo "✅ Docker daemon berhasil distart!"
+                  else
+                    echo "❌ Gagal start Docker daemon!"
+                    journalctl -u docker --no-pager -n 20
+                    exit 1
+                  fi
+                fi
+                systemctl enable docker 2>/dev/null || true
+                echo "✅ Docker di-set auto-start on boot"
+                ;;
+
+              # ── DOCKER RESTART ───────────────────────────
+              "🐳 docker-restart")
+                print_header "🐳 RESTARTING DOCKER DAEMON"
+                require_confirm
+                echo "⚠️  Semua container akan terhenti sementara!"
+                echo "🔄 Restarting Docker..."
+                systemctl restart docker
+                sleep 5
+                if docker info > /dev/null 2>&1; then
+                  echo "✅ Docker daemon berhasil di-restart!"
+                else
+                  echo "❌ Gagal restart Docker daemon!"
+                  exit 1
+                fi
+                ;;
+
+              # ── CONTAINERS UP ────────────────────────────
+              "🚀 containers-up")
+                print_header "🚀 STARTING CONTAINERS"
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                if [ "$TARGET" = "all" ]; then
+                  echo "🚀 Starting semua containers..."
+                  docker compose up -d
+                else
+                  echo "🚀 Starting container: $TARGET"
+                  docker compose up -d "$TARGET"
+                fi
+
+                sleep 10
+                echo ""
+                echo "📦 Container Status:"
+                docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                ;;
+
+              # ── CONTAINERS DOWN ──────────────────────────
+              "⏹️ containers-down")
+                print_header "⏹️ STOPPING CONTAINERS"
+                require_confirm
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                if [ "$TARGET" = "all" ]; then
+                  echo "⏹️  Stopping semua containers..."
+                  docker compose down
+                else
+                  echo "⏹️  Stopping container: $TARGET"
+                  docker compose stop "$TARGET"
+                fi
+
+                echo "✅ Done"
+                docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null || true
+                ;;
+
+              # ── CONTAINERS RESTART ───────────────────────
+              "🔄 containers-restart")
+                print_header "🔄 RESTARTING CONTAINERS"
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                if [ "$TARGET" = "all" ]; then
+                  echo "🔄 Restarting semua containers..."
+                  docker compose restart
+                else
+                  echo "🔄 Restarting container: $TARGET"
+                  docker compose restart "$TARGET"
+                fi
+
+                sleep 10
+                echo ""
+                echo "📦 Container Status:"
+                docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                ;;
+
+              # ── RUN SEEDER ──────────────────────────────
+              "🌱 run-seeder")
+                print_header "🌱 RUNNING DATABASE SEEDER"
+                require_confirm
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                if [ "$TARGET" = "all" ] || [ "$TARGET" = "host" ]; then
+                  echo "❌ Pilih service spesifik untuk seeder!"
+                  echo "   Contoh: auth-service, project-service, review-service"
+                  exit 1
+                fi
+
+                # Cek container running
+                if ! docker ps --format '{{.Names}}' | grep -q "^${TARGET}$"; then
+                  echo "❌ Container '$TARGET' tidak running!"
+                  echo "🔄 Mencoba start..."
+                  docker compose up -d "$TARGET"
+                  sleep 10
+                fi
+
+                echo "🌱 Menjalankan seeder pada: $TARGET"
+                echo ""
+                docker compose exec -T "$TARGET" npm run prisma:seed
+                echo ""
+                echo "✅ Seeder selesai!"
+                ;;
+
+              # ── EXEC COMMAND ─────────────────────────────
+              "⚡ exec-command")
+                print_header "⚡ EXECUTE CUSTOM COMMAND"
+
+                if [ -z "$CUSTOM_CMD" ]; then
+                  echo "❌ Custom command tidak boleh kosong!"
+                  echo "   Isi field 'custom_command' dengan perintah yang ingin dijalankan."
+                  exit 1
+                fi
+
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                if [ "$TARGET" = "host" ]; then
+                  echo "🖥️  Menjalankan di HOST server:"
+                  echo "   $ $CUSTOM_CMD"
+                  echo ""
+                  eval "$CUSTOM_CMD"
+                elif [ "$TARGET" = "all" ]; then
+                  echo "❌ Pilih service spesifik atau 'host' untuk exec!"
+                  exit 1
+                else
+                  # Cek container running
+                  if ! docker ps --format '{{.Names}}' | grep -q "^${TARGET}$"; then
+                    echo "❌ Container '$TARGET' tidak running!"
+                    exit 1
+                  fi
+
+                  echo "📦 Menjalankan di container: $TARGET"
+                  echo "   $ $CUSTOM_CMD"
+                  echo ""
+                  docker compose exec -T "$TARGET" sh -c "$CUSTOM_CMD"
+                fi
+
+                echo ""
+                echo "✅ Command selesai!"
+                ;;
+
+              # ── VIEW LOGS ───────────────────────────────
+              "📋 view-logs")
+                print_header "📋 VIEW CONTAINER LOGS"
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                if [ "$TARGET" = "all" ]; then
+                  echo "📋 Logs semua containers (last $LOG_LINES lines):"
+                  echo ""
+                  docker compose logs --tail "$LOG_LINES" --no-color
+                elif [ "$TARGET" = "host" ]; then
+                  echo "📋 System logs (last $LOG_LINES lines):"
+                  echo ""
+                  journalctl --no-pager -n "$LOG_LINES"
+                else
+                  echo "📋 Logs $TARGET (last $LOG_LINES lines):"
+                  echo ""
+                  docker compose logs "$TARGET" --tail "$LOG_LINES" --no-color
+                fi
+                ;;
+
+              # ── HEALTH CHECK ─────────────────────────────
+              "🏥 health-check")
+                print_header "🏥 HEALTH CHECK"
+                ensure_docker
+                cd "$PROJECT_DIR"
+
+                echo "── 🐳 Container Health ─────────────────────────"
+
+                SERVICES=("api-gateway:8080" "auth-service:8001" "project-service:8004" "review-service:8005" "product-service:8002" "chat-service:8003")
+                ALL_OK=true
+
+                for SERVICE_PORT in "${SERVICES[@]}"; do
+                  SERVICE="${SERVICE_PORT%%:*}"
+                  PORT="${SERVICE_PORT##*:}"
+
+                  if ! docker ps --format '{{.Names}}' | grep -q "^${SERVICE}$"; then
+                    echo "  ❌ ${SERVICE} — NOT RUNNING"
+                    ALL_OK=false
+                    continue
+                  fi
+
+                  HTTP_CODE=$(docker exec ${SERVICE} curl -s -o /dev/null -w "%{http_code}" http://localhost:${PORT}/health 2>/dev/null || echo "000")
+
+                  if [ "$HTTP_CODE" = "200" ]; then
+                    echo "  ✅ ${SERVICE} — healthy (port ${PORT})"
+                  else
+                    echo "  ⚠️  ${SERVICE} — HTTP ${HTTP_CODE} (port ${PORT})"
+                    ALL_OK=false
+                  fi
+                done
+
+                echo ""
+                echo "── 🗄️  Database Health ─────────────────────────"
+
+                # MongoDB
+                if docker exec mongodb mongosh --eval "db.adminCommand('ping')" --quiet 2>/dev/null | grep -q "ok"; then
+                  echo "  ✅ mongodb — healthy"
+                else
+                  echo "  ❌ mongodb — not responding"
+                  ALL_OK=false
+                fi
+
+                # Redis
+                REDIS_PASS=$(grep REDIS_PASSWORD "$PROJECT_DIR/.env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+                if docker exec redis redis-cli -a "${REDIS_PASS}" ping 2>/dev/null | grep -q "PONG"; then
+                  echo "  ✅ redis — healthy"
+                else
+                  echo "  ❌ redis — not responding"
+                  ALL_OK=false
+                fi
+
+                echo ""
+                echo "── 🌐 External Access ─────────────────────────"
+
+                # Nginx
+                if systemctl is-active nginx > /dev/null 2>&1; then
+                  echo "  ✅ nginx — running"
+                else
+                  echo "  ❌ nginx — not running"
+                  ALL_OK=false
+                fi
+
+                # HTTPS endpoint
+                HTTPS_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.bangunanmu.my.id/health 2>/dev/null || echo "000")
+                if [ "$HTTPS_CODE" = "200" ]; then
+                  echo "  ✅ HTTPS endpoint — reachable (HTTP $HTTPS_CODE)"
+                else
+                  echo "  ⚠️  HTTPS endpoint — HTTP $HTTPS_CODE"
+                fi
+
+                echo ""
+                if [ "$ALL_OK" = true ]; then
+                  echo "🟢 Semua service HEALTHY!"
+                else
+                  echo "🔴 Ada service yang bermasalah!"
+                fi
+                ;;
+
+              # ── DISK CLEANUP ─────────────────────────────
+              "🧹 disk-cleanup")
+                print_header "🧹 DISK CLEANUP"
+                ensure_docker
+
+                echo "── 💾 Disk Usage SEBELUM cleanup ─────────────"
+                df -h / | tail -1 | awk '{print "   Used: "$3" / "$2" ("$5" full)"}'
+                echo "   Docker disk: $(docker system df --format 'table {{.Type}}\t{{.TotalCount}}\t{{.Size}}\t{{.Reclaimable}}' 2>/dev/null || echo 'N/A')"
+
+                echo ""
+                echo "🧹 Cleaning up..."
+                docker image prune -f 2>/dev/null || true
+                docker builder prune -f 2>/dev/null || true
+                docker volume prune -f 2>/dev/null || true
+                docker container prune -f 2>/dev/null || true
+
+                # Clean system logs older than 3 days
+                journalctl --vacuum-time=3d 2>/dev/null || true
+
+                echo ""
+                echo "── 💾 Disk Usage SESUDAH cleanup ─────────────"
+                df -h / | tail -1 | awk '{print "   Used: "$3" / "$2" ("$5" full)"}'
+                echo ""
+                echo "✅ Cleanup selesai!"
+                ;;
+
+              # ── NGINX RESTART ────────────────────────────
+              "🔑 nginx-restart")
+                print_header "🔑 NGINX RESTART"
+
+                echo "🔄 Testing nginx config..."
+                nginx -t 2>&1
+
+                if [ $? -eq 0 ]; then
+                  echo "✅ Config OK, restarting nginx..."
+                  systemctl restart nginx
+                  sleep 2
+                  if systemctl is-active nginx > /dev/null 2>&1; then
+                    echo "✅ Nginx berhasil di-restart!"
+                  else
+                    echo "❌ Nginx gagal start!"
+                    systemctl status nginx --no-pager
+                    exit 1
+                  fi
+                else
+                  echo "❌ Nginx config error! Tidak jadi restart."
+                  exit 1
+                fi
+                ;;
+
+              *)
+                echo "❌ Aksi tidak dikenali: $ACTION"
+                exit 1
+                ;;
+            esac
+
+            echo ""
+            echo "════════════════════════════════════════════════"
+            echo "  ✅ DONE — $ACTION"
+            echo "  📅 $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            echo "════════════════════════════════════════════════"
