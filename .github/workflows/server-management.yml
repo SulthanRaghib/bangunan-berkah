@@ -373,7 +373,13 @@ jobs:
                     continue
                   fi
 
-                  HTTP_CODE=$(docker exec ${SERVICE} curl -s -o /dev/null -w "%{http_code}" http://localhost:${PORT}/health 2>/dev/null || echo "000")
+                  # Use node (available in all containers) instead of curl
+                  HTTP_CODE=$(docker exec ${SERVICE} node -e "
+                    const http = require('http');
+                    http.get('http://localhost:${PORT}/health', (res) => {
+                      process.stdout.write(String(res.statusCode));
+                    }).on('error', () => { process.stdout.write('000'); });
+                  " 2>/dev/null || echo "000")
 
                   if [ "$HTTP_CODE" = "200" ]; then
                     echo "  ✅ ${SERVICE} — healthy (port ${PORT})"
